@@ -1,14 +1,14 @@
 {
   "name": "screenshot-panel",
   "version": "1.0.0",
-  "description": "A simple screenshot panel with WebSocket support",
+  "description": "A simple screenshot panel with WebSocket support + Free AI Auto-Answer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": ["screenshot", "websocket", "express"],
-  "author": "Eduard Zhuravlev",
+  "keywords": ["screenshot", "websocket", "express", "ai", "deepseek", "gemini"],
+  "author": "Eduard Zhuravlev + Grok",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
@@ -19,6 +19,7 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.7.0",
     "sharp": "^0.33.3",
     "uuid": "^10.0.0",
     "ws": "^8.18.0"
