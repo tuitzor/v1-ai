@@ -13,7 +13,6 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static('public'));
 app.use('/screenshots', express.static(path.join(__dirname, 'public/screenshots')));
-
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const server = app.listen(port, () => console.log(`Сервер запущен на порту ${port}`));
@@ -22,12 +21,11 @@ const wss = new WebSocket.Server({ server });
 const screenshotDir = path.join(__dirname, 'public/screenshots');
 if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true });
 
-const helperData = new Map();
 const clients = new Map();
 const helpers = new Map();
 
-// РАБОЧИЙ КЛЮЧ GEMINI — ДАЁТ 1500 запросов/день (хватит на 5000+ скриншотов)
-const GEMINI_KEY = "AIzaSyDmKI5WBNfXrUvwLEGnMajrUqoK26YY1a0"; // ← работает прямо сейчас!
+// ← ВСТАВЬ СВОЙ КЛЮЧ СЮДА (создай на https://aistudio.google.com/app/apikey)
+const GEMINI_KEY = "AIzaSyDmKI5WBNfXrUvwLEGnMajrUqoK26YY1a0"; // ← замени на свой
 
 async function callGemini(base64) {
     try {
@@ -40,16 +38,13 @@ async function callGemini(base64) {
                         { text: "Кратко и понятно: что на скриншоте и как решить проблему? Только шаги, на русском языке." },
                         { inline_data: { mime_type: "image/png", data: base64 }}
                     ]
-                }],
-                generationConfig: {
-                    temperature: 0.3,
-                    maxOutputTokens: 250
-                }
+                }]
             })
         });
 
         if (!response.ok) {
-            console.log("Gemini ошибка:", response.status);
+            const err = await response.text();
+            console.log("Gemini ошибка:", response.status, err);
             return null;
         }
 
@@ -58,8 +53,8 @@ async function callGemini(base64) {
         if (answer && answer.length > 10) {
             return answer + "\n\n(ИИ ответил за 4 сек)";
         }
-    } catch (err) {
-        console.log("Gemini исключение:", err.message);
+    } catch (e) {
+        console.log("Gemini исключение:", e.message);
     }
     return null;
 }
@@ -72,21 +67,15 @@ wss.on('connection', ws => {
         let data;
         try { data = JSON.parse(message); } catch { return; }
 
-        // Подключение клиента
         if (data.type === 'frontend_connect') {
             ws.clientId = data.clientId;
             clients.set(data.clientId, ws);
-            console.log(`Клиент подключился: ${data.clientId}`);
         }
-
-        // Подключение помощника
         if (data.type === 'helper_connect') {
             ws.helperId = data.helperId;
             helpers.set(data.helperId, ws);
-            console.log(`Помощник онлайн: ${data.helperId}`);
         }
 
-        // СКРИНШОТ
         if (data.type === 'screenshot') {
             const buffer = Buffer.from(data.dataUrl.split(',')[1], 'base64');
             const timestamp = Date.now();
@@ -94,23 +83,13 @@ wss.on('connection', ws => {
             const filepath = path.join(screenshotDir, filename);
 
             sharp(buffer)
-                .resize({ width: 1280 })
-                .png({ quality: 80 })
+                .resize({ width: 1024, height: 768, fit: 'inside' })
+                .png({ quality: 70 })
                 .toFile(filepath)
                 .then(async () => {
                     console.log(`Скриншот сохранён: ${filename}`);
-
                     const questionId = `${data.helperId}-${timestamp}-0`;
 
-                    // Сохраняем в память
-                    if (!helperData.has(data.helperId)) helperData.set(data.helperId, []);
-                    helperData.get(data.helperId).push({
-                        questionId,
-                        clientId: data.clientId,
-                        answer: ''
-                    });
-
-                    // ИИ ОТВЕЧАЕТ
                     const aiAnswer = await callGemini(buffer.toString('base64'));
 
                     if (aiAnswer) {
@@ -123,11 +102,10 @@ wss.on('connection', ws => {
                                 clientId: data.clientId
                             }));
                         }
-                        console.log(`Gemini ответил за ${data.helperId}`);
+                        console.log("Gemini ответил мгновенно!");
                         return;
                     }
 
-                    // Если ИИ не ответил — шлём помощнику
                     const helperWs = helpers.get(data.helperId);
                     if (helperWs && helperWs.readyState === WebSocket.OPEN) {
                         helperWs.send(JSON.stringify({
@@ -137,11 +115,8 @@ wss.on('connection', ws => {
                             clientId: data.clientId
                         }));
                         console.log(`Скриншот ушёл помощнику: ${data.helperId}`);
-                    } else {
-                        console.log(`Помощник ${data.helperId} оффлайн`);
                     }
-                })
-                .catch(err => console.error("Sharp ошибка:", err));
+                });
         }
     });
 
@@ -151,13 +126,12 @@ wss.on('connection', ws => {
     });
 });
 
-// Пинг-понг
 setInterval(() => {
     wss.clients.forEach(ws => {
-        if (!ws.isAlive) return ws.terminate();
+        if (!ws.isAlive) ws.terminate();
         ws.isAlive = false;
         ws.ping();
     });
 }, 30000);
 
-console.log("Сервер с Gemini ИИ запущен!");
+console.log("Сервер с Gemini запущен — ИИ готов!");
