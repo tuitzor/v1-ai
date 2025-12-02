@@ -29,33 +29,29 @@ const GEMINI_KEY = "AIzaSyDmKI5WBNfXrUvwLEGnMajrUqoK26YY1a0"; // ← замен�
 
 async function callGemini(base64) {
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
+        const res = await fetch("https://api.deepseek.com/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Authorization": "Bearer sk-or-v1-8f3c7f3a3b1d4e9a9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a190f",  // публичный ключ
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        { text: "Кратко и понятно: что на скриншоте и как решить проблему? Только шаги, на русском языке." },
-                        { inline_data: { mime_type: "image/png", data: base64 }}
+                model: "deepseek-chat",
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Решение проблемы на скриншоте — коротко, по шагам, на русском" },
+                        { type: "image_url", image_url: { url: `data:image/png;base64,${base64}` }}
                     ]
                 }]
             })
         });
 
-        if (!response.ok) {
-            const err = await response.text();
-            console.log("Gemini ошибка:", response.status, err);
-            return null;
-        }
-
-        const json = await response.json();
-        const answer = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (answer && answer.length > 10) {
-            return answer + "\n\n(ИИ ответил за 4 сек)";
-        }
-    } catch (e) {
-        console.log("Gemini исключение:", e.message);
-    }
+        if (!res.ok) return null;
+        const json = await res.json();
+        const answer = json.choices?.[0]?.message?.content?.trim();
+        if (answer) return answer + "\n\n(DeepSeek ИИ)";
+    } catch (e) {}
     return null;
 }
 
