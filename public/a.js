@@ -1,5 +1,5 @@
 (async () => {
-    const production = location.protocol === 'https:' ? 'wss://young-z7wb.onrender.com' : 'ws://localhost:10000';
+    const production = location.protocol === 'https:' ? 'wss://v1-ai.onrender.com' : 'ws://localhost:10000';
     let socket = null;
     let isHtml2canvasLoaded = false;
     let isProcessingScreenshot = false;
@@ -86,7 +86,7 @@
         for (let img of images) {
             if (img.src && !img.src.startsWith("data:")) {
                 promises.push(
-                    fetch("https://young-z7wb.onrender.com/proxy-image?url=" + encodeURIComponent(img.src))
+                    fetch("https://v1-ai.onrender.com/proxy-image?url=" + encodeURIComponent(img.src))
                         .then(response => {
                             if (!response.ok) {
                                 console.warn("helper.js: Proxy failed for", img.src, "on", window.location.href, "using original URL");
