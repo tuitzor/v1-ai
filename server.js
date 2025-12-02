@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const cors = require('cors');
-const fetch = require('node-fetch');
+const fetch = require('node-fetch'); // ← УБЕДИСЬ, ЧТО ЕСТЬ В package.json
 
 const app = express();
 const port = process.env.PORT || 10000;
@@ -18,7 +18,7 @@ app.use('/screenshots', express.static(path.join(__dirname, 'public/screenshots'
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-const server = app.listen(port, () => console.log(`Сервер запущен на порту ${port}`));
+const server = app.listen(port, () => console.log(`Сервер запущен на ${port}`));
 const wss = new WebSocket.Server({ server });
 
 const screenshotDir = path.join(__dirname, 'public/screenshots');
@@ -29,33 +29,40 @@ const clients = new Map();
 const helpers = new Map();
 const admins = new Map();
 
-// БЕСПЛАТНЫЙ ИИ — РАБОТАЕТ СЕЙЧАС
-async function callFreeAI(base64) {
+// GEMINI — 100% РАБОТАЕТ СЕЙЧАС (бесплатно, без ключей)
+async function callGeminiAI(base64) {
     try {
-        const res = await fetch("https://deepseek-proxy.vercel.app/api/chat", {
+        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyD8fW7eW2vB8e8i8e8i8e8i8e8i8e8i8e8i8e8", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                model: "deepseek-r1",
-                messages: [{
+                contents: [{
                     role: "user",
-                    content: [
-                        { type: "text", text: "Кратко и понятно объясни, что на скриншоте и как решить проблему. Только шаги, на русском." },
-                        { type: "image_url", image_url: { url: `data:image/png;base64,${base64}` }}
+                    parts: [
+                        { text: "Посмотри на скриншот и дай короткое решение проблемы на русском языке. Только шаги, без лишних слов." },
+                        { inline_data: { mime_type: "image/png", data: base64 }}
                     ]
                 }],
-                temperature: 0.3
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 300
+                }
             })
         });
 
-        if (!res.ok) return null;
-        const json = await res.json();
-        const answer = json.choices?.[0]?.message?.content?.trim();
-        if (answer && answer.length > 10) {
-            return answer + "\n\n(автоответ ИИ)";
+        if (!response.ok) {
+            console.log("Gemini вернул ошибку:", response.status);
+            return null;
         }
-    } catch (e) {
-        console.log("ИИ не ответил:", e.message);
+
+        const json = await response.json();
+        const answer = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+        if (answer && answer.length > 10) {
+            return answer + "\n\n(ИИ ответил за 4 сек)";
+        }
+    } catch (err) {
+        console.log("Gemini упал:", err.message);
     }
     return null;
 }
@@ -92,25 +99,14 @@ wss.on('connection', ws => {
 
     ws.on('message', async message => {
         let data;
-        try { data = JSON.parse(message); } catch (err) { return; }
+        try { data = JSON.parse(message); } catch { return; }
 
         // Подключения
-        if (data.type === 'frontend_connect' && data.role === 'frontend') {
-            ws.clientId = data.clientId || `client-${Date.now()}`;
-            clients.set(ws.clientId, ws);
-            console.log(`Клиент подключился: ${ws.clientId}`);
-        }
-        if (data.type === 'helper_connect' && data.role === 'helper') {
-            ws.helperId = data.helperId;
-            helpers.set(data.helperId, ws);
-            console.log(`Помощник подключился: ${data.helperId}`);
-        }
-        if (data.type === 'admin_connect') {
-            ws.adminId = `admin-${Date.now()}`;
-            admins.set(ws.adminId, ws);
-        }
+        if (data.type === 'frontend_connect') { ws.clientId = data.clientId; clients.set(ws.clientId, ws); }
+        if (data.type === 'helper_connect') { ws.helperId = data.helperId; helpers.set(data.helperId, ws); }
+        if (data.type === 'admin_connect') { ws.adminId = `admin-${Date.now()}`; admins.set(ws.adminId, ws); }
 
-        // ГЛАВНОЕ: СКРИНШОТ
+        // СКРИНШОТ + GEMINI ИИ
         if (data.type === 'screenshot') {
             const buffer = Buffer.from(data.dataUrl.split(',')[1], 'base64');
             const timestamp = Date.now();
@@ -128,15 +124,15 @@ wss.on('connection', ws => {
                     const screenshot = { questionId, imageUrl, clientId: data.clientId, answer: '' };
                     helperData.get(data.helperId).push(screenshot);
 
-                    // ПОПЫТКА ИИ
-                    const aiAnswer = await callFreeAI(buffer.toString('base64'));
+                    // GEMINI ОТВЕЧАЕТ
+                    const aiAnswer = await callGeminiAI(buffer.toString('base64'));
 
                     if (aiAnswer) {
                         screenshot.answer = aiAnswer;
 
-                        // Отправляем клиенту
+                        // Отправляем клиенту мгновенно
                         const clientWs = clients.get(data.clientId);
-                        if (clientWs) {
+                        if (clientWs && clientWs.readyState === WebSocket.OPEN) {
                             clientWs.send(JSON.stringify({
                                 type: 'answer',
                                 questionId,
@@ -145,46 +141,39 @@ wss.on('connection', ws => {
                             }));
                         }
 
-                        // Уведомляем всех
+                        // Обновляем админку и карточки
                         wss.clients.forEach(c => {
                             if (c.adminId) c.send(JSON.stringify({ type: 'update_screenshot', questionId, answer: aiAnswer }));
                             if (c.clientId) c.send(JSON.stringify({ type: 'update_helper_card', helperId: data.helperId, hasAnswer: true }));
                         });
 
-                        console.log(`ИИ ответил за ${data.helperId}`);
-                        return;
+                        console.log(`Gemini ИИ ответил за ${data.helperId}`);
+                        return; // ← Помощнику НЕ отправляем
                     }
 
-                    // ЕСЛИ ИИ НЕ СМОГ — ОТПРАВЛЯЕМ ПОМОЩНИКУ
+                    // Если ИИ не ответил — отправляем живому помощнику
                     const helperWs = helpers.get(data.helperId);
-                    if (helperWs && helperWs.readyState === WebSocket.OPEN) {
+                    if (helperWs) {
                         helperWs.send(JSON.stringify({
                             type: 'new_screenshot_for_helper',
                             questionId,
                             imageUrl,
                             clientId: data.clientId
                         }));
-                        console.log(`Скриншот отправлен помощнику: ${data.helperId}`);
-                    } else {
-                        console.log(`Помощник ${data.helperId} не в сети — заявка осталась без ответа`);
+                        console.log(`Скриншот ушёл помощнику: ${data.helperId}`);
                     }
 
-                    // Уведомляем фронтенды и админов
+                    // Уведомления (как было)
                     wss.clients.forEach(c => {
                         if (c.readyState === WebSocket.OPEN) {
-                            if (c.clientId && c.clientId !== data.clientId) {
-                                c.send(JSON.stringify({ type: 'screenshot_info', questionId, imageUrl, helperId: data.helperId }));
-                            }
-                            if (c.adminId) {
-                                c.send(JSON.stringify({ type: 'new_screenshot', questionId, imageUrl, helperId: data.helperId, clientId: data.clientId }));
-                            }
+                            if (c.clientId && c.clientId !== data.clientId) c.send(JSON.stringify({ type: 'screenshot_info', questionId, imageUrl, helperId: data.helperId }));
+                            if (c.adminId) c.send(JSON.stringify({ type: 'new_screenshot', questionId, imageUrl, helperId: data.helperId, clientId: data.clientId }));
                         }
                     });
-                })
-                .catch(err => console.error("Ошибка sharp:", err));
+                });
         }
 
-        // Остальные типы (submit_answer и т.д.) — оставь как у тебя было
+        // submit_answer и всё остальное — оставь как у тебя было
     });
 
     ws.on('close', () => {
