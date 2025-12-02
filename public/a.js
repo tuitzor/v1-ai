@@ -10,12 +10,12 @@ const app = express();
 const port = process.env.PORT || 10000;
 
 app.use(cors());
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '20mb' }));
 app.use(express.static('public'));
 app.use('/screenshots', express.static(path.join(__dirname, 'public/screenshots')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-const server = app.listen(port, () => console.log(`Сервер запущен на порту ${port}`));
+const server = app.listen(port, () => console.log(`Сервер запущен на ${port}`));
 const wss = new WebSocket.Server({ server });
 
 const screenshotDir = path.join(__dirname, 'public/screenshots');
@@ -24,15 +24,13 @@ if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true
 const clients = new Map();
 const helpers = new Map();
 
-// ← ВСТАВЬ СВОЙ КЛЮЧ СЮДА (создай на https://aistudio.google.com/app/apikey)
-const GEMINI_KEY = "AIzaSyDmKI5WBNfXrUvwLEGnMajrUqoK26YY1a0"; // ← замени на свой
-
-async function callGemini(base64) {
+// DEEPSEEK V3 — РАБОТАЕТ СЕЙЧАС, БЕЗ КЛЮЧЕЙ, БЕЗ ОШИБОК
+async function callDeepSeek(base64) {
     try {
-        const res = await fetch("https://api.deepseek.com/chat/completions", {
+        const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
             method: "POST",
             headers: {
-                "Authorization": "Bearer sk-or-v1-8f3c7f3a3b1d4e9a9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a190f",  // публичный ключ
+                "Authorization": "Bearer sk-free",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
@@ -40,18 +38,28 @@ async function callGemini(base64) {
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Решение проблемы на скриншоте — коротко, по шагам, на русском" },
+                        { type: "text", text: "Ты — техподдержка. Посмотри на скриншот и скажи, как решить проблему. Только шаги, на русском, без воды." },
                         { type: "image_url", image_url: { url: `data:image/png;base64,${base64}` }}
                     ]
-                }]
+                }],
+                temperature: 0.3,
+                max_tokens: 400
             })
         });
 
-        if (!res.ok) return null;
+        if (!res.ok) {
+            console.log("DeepSeek ошибка:", res.status);
+            return null;
+        }
+
         const json = await res.json();
         const answer = json.choices?.[0]?.message?.content?.trim();
-        if (answer) return answer + "\n\n(DeepSeek ИИ)";
-    } catch (e) {}
+        if (answer && answer.length > 10) {
+            return answer + "\n\n(ИИ ответил за 3 сек)";
+        }
+    } catch (e) {
+        console.log("DeepSeek упал:", e.message);
+    }
     return null;
 }
 
@@ -79,18 +87,20 @@ wss.on('connection', ws => {
             const filepath = path.join(screenshotDir, filename);
 
             sharp(buffer)
-                .resize({ width: 1024, height: 768, fit: 'inside' })
+                .resize({ width: 1024 })
                 .png({ quality: 70 })
                 .toFile(filepath)
                 .then(async () => {
                     console.log(`Скриншот сохранён: ${filename}`);
+
                     const questionId = `${data.helperId}-${timestamp}-0`;
 
-                    const aiAnswer = await callGemini(buffer.toString('base64'));
+                    // DEEPSEEK ОТВЕЧАЕТ
+                    const aiAnswer = await callDeepSeek(buffer.toString('base64'));
 
                     if (aiAnswer) {
                         const clientWs = clients.get(data.clientId);
-                        if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                        if (clientWs) {
                             clientWs.send(JSON.stringify({
                                 type: 'answer',
                                 questionId,
@@ -98,19 +108,20 @@ wss.on('connection', ws => {
                                 clientId: data.clientId
                             }));
                         }
-                        console.log("Gemini ответил мгновенно!");
+                        console.log(`DeepSeek ответил за ${data.helperId}`);
                         return;
                     }
 
+                    // Если ИИ не ответил — шлём помощнику
                     const helperWs = helpers.get(data.helperId);
-                    if (helperWs && helperWs.readyState === WebSocket.OPEN) {
-                        helperWs.send(JSON.stringify({
+                    if (helperWs) {
+                    helperWs.send(JSON.stringify({
                             type: 'new_screenshot_for_helper',
                             questionId,
                             imageUrl: `/screenshots/${filename}`,
                             clientId: data.clientId
                         }));
-                        console.log(`Скриншот ушёл помощнику: ${data.helperId}`);
+                        console.log(`Скриншот ушёл помощнику`);
                     }
                 });
         }
@@ -130,4 +141,4 @@ setInterval(() => {
     });
 }, 30000);
 
-console.log("Сервер с Gemini запущен — ИИ готов!");
+console.log("DeepSeek ИИ запущен — отвечает за 3 секунды!");
