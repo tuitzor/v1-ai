@@ -3,423 +3,381 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админ-панель Тест-Хелпера</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Интерактивный Тест</title>
+    <!-- Подключение Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Настройка шрифта Inter -->
     <style>
-        /* Настройка шрифта Inter и базовые стили */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7fafc;
+            background-color: #f7f7f9;
         }
-        .chat-scroll {
-            height: calc(100vh - 150px);
-            overflow-y: auto;
-        }
-        .test-list-scroll {
-            max-height: calc(100vh - 100px);
-            overflow-y: auto;
+        /* Пользовательский CSS для изменения курсора */
+        .correct-answer-visible:hover {
+            cursor: help !important; /* Курсор меняется на 'help' (знак вопроса) */
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.7);
         }
     </style>
 </head>
-<body class="p-4 sm:p-6 bg-gray-100 min-h-screen">
+<body class="p-4 md:p-8">
 
-    <div id="app" class="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
-        
-        <!-- Колонка с комнатами/статусом (Sidebar) -->
-        <div class="lg:w-1/3 w-full bg-white p-4 rounded-xl shadow-lg h-full">
-            <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
-                Активные комнаты (Тесты)
-            </h2>
-            
-            <!-- Статус WebSocket -->
-            <div id="ws-status" class="mb-4 p-2 text-sm rounded-lg font-medium transition duration-300">
-                Подключение...
-            </div>
+    <div id="app" class="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-2xl space-y-8">
+        <h1 class="text-3xl font-extrabold text-gray-900 border-b pb-3 mb-6">Интерактивный Тест с Сохранением Данных</h1>
 
-            <!-- Список комнат -->
-            <div id="room-list" class="space-y-3 test-list-scroll">
-                <p class="text-gray-500 text-sm">Ожидание данных с сервера...</p>
-            </div>
+        <div id="status-message" class="p-4 rounded-lg text-sm font-medium hidden"></div>
+        <div id="loader" class="text-center text-blue-600 font-semibold">Загрузка данных и аутентификация...</div>
+
+        <div id="test-container" class="space-y-12 hidden">
+            <!-- Вопросы будут загружены сюда -->
         </div>
 
-        <!-- Колонка с текущим тестом (Main Content) -->
-        <div class="lg:w-2/3 w-full bg-white p-6 rounded-xl shadow-lg">
-            <div id="test-view">
-                <h2 id="current-test-title" class="text-2xl font-extrabold mb-2 text-indigo-700">
-                    Выберите комнату для начала работы
-                </h2>
-                <p id="current-test-url" class="text-sm text-gray-500 mb-6 truncate">
-                    URL: (Не выбрано)
-                </p>
+        <div id="controls" class="flex flex-col sm:flex-row gap-4 pt-6 border-t">
+            <button id="submit-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md disabled:opacity-50" disabled>
+                Отправить ответы и сохранить прогресс
+            </button>
+            <button id="admin-delete-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md disabled:opacity-50">
+                Имитация: Админ отправил ответ (Удалить прогресс)
+            </button>
+        </div>
 
-                <!-- Контейнер вопросов -->
-                <div id="questions-container" class="space-y-8 chat-scroll p-2">
-                    <div class="flex items-center justify-center h-full text-gray-400 text-lg py-20">
-                        Тест будет загружен здесь после выбора комнаты.
-                    </div>
-                </div>
-
-                <!-- Кнопка сохранения/отправки (внизу) -->
-                <div class="mt-6 pt-4 border-t sticky bottom-0 bg-white">
-                    <button id="submit-answers-btn" disabled class="w-full bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-600 transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                        Отправить ответы клиенту
-                    </button>
-                </div>
-            </div>
+        <div id="debug-info" class="text-xs text-gray-500 pt-8 border-t mt-8">
+            <h3 class="font-bold mb-2">Отладочная информация:</h3>
+            <p>ID Приложения: <span id="app-id-display"></span></p>
+            <p>ID Пользователя: <span id="user-id-display"></span></p>
+            <p>Статус сохранения: <span id="save-status">Ожидание действия...</span></p>
         </div>
     </div>
 
-    <script>
-        // Глобальные переменные и настройки
-        const production = location.protocol === 'https:' ?
-            'wss://v1-ai.onrender.com' :
-            'ws://localhost:10000';
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        let socket = null;
-        let adminId = `admin-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-        let isConnected = false;
+        // Включение логов Firestore для отладки
+        setLogLevel('Debug');
 
-        // Состояние приложения
-        let state = {
-            activeRooms: {}, // { roomNumber: { helperId, title, url, questions, answers } }
-            selectedRoom: null, // Номер текущей комнаты
-            currentAnswers: new Map(), // Map<questionId, answerText> для текущего теста
-        };
+        // Глобальные переменные, предоставленные Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // Переменные Firebase
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let submissionId = 'user_submission_' + Date.now(); // Уникальный ID для этой сессии/попытки
+        let isAuthReady = false;
 
-        // DOM элементы
-        const elements = {
-            status: document.getElementById('ws-status'),
-            roomList: document.getElementById('room-list'),
-            title: document.getElementById('current-test-title'),
-            url: document.getElementById('current-test-url'),
-            questionsContainer: document.getElementById('questions-container'),
-            submitBtn: document.getElementById('submit-answers-btn')
-        };
+        // Элементы DOM
+        const appDisplay = document.getElementById('app-id-display');
+        const userDisplay = document.getElementById('user-id-display');
+        const loader = document.getElementById('loader');
+        const testContainer = document.getElementById('test-container');
+        const statusMessage = document.getElementById('status-message');
+        const saveStatusDisplay = document.getElementById('save-status');
+        const submitBtn = document.getElementById('submit-btn');
+        const adminDeleteBtn = document.getElementById('admin-delete-btn');
 
-        // --- WebSocket Логика ---
-
-        function updateWsStatus(status, color, message) {
-            elements.status.textContent = `${status}: ${message}`;
-            elements.status.className = `mb-4 p-2 text-sm rounded-lg font-medium transition duration-300 ${color}`;
-        }
-
-        function connectWebSocket() {
-            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
-            
-            updateWsStatus('Подключение', 'bg-yellow-100 text-yellow-800', 'Установка соединения...');
-            socket = new WebSocket(production);
-
-            socket.onopen = () => {
-                isConnected = true;
-                updateWsStatus('Подключено', 'bg-green-100 text-green-800', 'Ожидание новых тестов...');
-                console.log(`[Admin] WebSocket connected. ID: ${adminId}`);
-                
-                // 1. Сообщаем серверу, что мы - админ
-                socket.send(JSON.stringify({
-                    type: "admin_connect",
-                    adminId: adminId
-                }));
-                
-                // 2. Запрашиваем текущее состояние всех комнат
-                socket.send(JSON.stringify({ type: "request_room_status" }));
-            };
-
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleIncomingMessage(data);
-                } catch (err) {
-                    console.error('[Admin] Message parsing error:', err);
-                }
-            };
-
-            socket.onerror = (error) => {
-                isConnected = false;
-                updateWsStatus('Ошибка', 'bg-red-100 text-red-800', 'Ошибка соединения.');
-                console.error('[Admin] WebSocket error:', error);
-            };
-
-            socket.onclose = () => {
-                isConnected = false;
-                updateWsStatus('Отключено', 'bg-red-100 text-red-800', 'Переподключение через 5с...');
-                console.log('[Admin] WebSocket closed, reconnecting...');
-                setTimeout(connectWebSocket, 5000);
-            };
-        }
-
-        // Обработка входящих сообщений
-        function handleIncomingMessage(data) {
-            console.log('[Admin] Received:', data.type, data);
-
-            switch (data.type) {
-                case 'room_status':
-                    // Обновление списка активных комнат
-                    state.activeRooms = data.rooms;
-                    renderRoomList();
-                    break;
-                case 'new_test':
-                    // Получен новый тест для комнаты
-                    const roomNum = data.room;
-                    state.activeRooms[roomNum] = {
-                        room: roomNum,
-                        helperId: data.helperId,
-                        title: data.title,
-                        url: data.url,
-                        questions: data.questions,
-                        answers: data.answers || {}, // Актуальные ответы для этого теста
-                        timestamp: data.timestamp
-                    };
-                    renderRoomList();
-                    
-                    // Если это активная комната, обновляем ее
-                    if (state.selectedRoom === roomNum) {
-                        selectRoom(roomNum); // Перерисовываем с новыми вопросами
-                    }
-                    break;
-                case 'answer_update':
-                    // Ответ обновился (например, другим админом).
-                    const updatedRoom = state.activeRooms[data.room];
-                    if (updatedRoom) {
-                        updatedRoom.answers[data.questionId] = data.answer;
-                        if (state.selectedRoom === data.room) {
-                            state.currentAnswers.set(data.questionId, data.answer);
-                            renderQuestions(updatedRoom.questions);
-                        }
-                    }
-                    break;
-                case 'room_disconnected':
-                    // Клиент отключился
-                    delete state.activeRooms[data.room];
-                    renderRoomList();
-                    if (state.selectedRoom === data.room) {
-                        state.selectedRoom = null;
-                        renderTestView();
-                    }
-                    break;
+        // Моковый набор вопросов (включая URL изображения)
+        const mockQuestions = [
+            {
+                id: 1,
+                question: "Какое геометрическое тело представлено на изображении?",
+                imageUrl: "https://placehold.co/400x200/4c77aa/ffffff?text=Трехмерная+Фигура",
+                options: ["Куб", "Пирамида", "Сфера", "Цилиндр"],
+                correctAnswer: "Сфера",
+                userAnswer: null
+            },
+            {
+                id: 2,
+                question: "Кто является автором романа 'Война и мир'?",
+                imageUrl: "https://placehold.co/400x200/8d6e63/ffffff?text=Старинная+Книга",
+                options: ["Ф.М. Достоевский", "Л.Н. Толстой", "А.П. Чехов", "И.С. Тургенев"],
+                correctAnswer: "Л.Н. Толстой",
+                userAnswer: null
+            },
+             {
+                id: 3,
+                question: "Какой элемент имеет атомный номер 1?",
+                imageUrl: "https://placehold.co/400x200/9ccc65/ffffff?text=Атом",
+                options: ["Кислород", "Гелий", "Водород", "Углерод"],
+                correctAnswer: "Водород",
+                userAnswer: null
             }
-        }
+        ];
 
-        // --- UI Логика: Список комнат ---
+        // --- Firebase Инициализация и Аутентификация ---
 
-        function renderRoomList() {
-            elements.roomList.innerHTML = '';
-            const rooms = Object.values(state.activeRooms).sort((a, b) => b.timestamp - a.timestamp);
-
-            if (rooms.length === 0) {
-                elements.roomList.innerHTML = '<p class="text-gray-500 text-sm">Нет активных клиентов. Откройте клиентский скрипт, чтобы увидеть комнату.</p>';
+        async function initFirebase() {
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.error("Firebase config is missing.");
+                showStatus('Ошибка: Конфигурация Firebase не найдена.', 'bg-red-100 text-red-800');
+                loader.textContent = "Ошибка загрузки: Проверьте конфигурацию Firebase.";
                 return;
             }
 
-            rooms.forEach(roomData => {
-                const isSelected = roomData.room === state.selectedRoom;
-                const lastUpdate = new Date(roomData.timestamp).toLocaleTimeString('ru-RU');
-                
-                const roomElement = document.createElement('div');
-                roomElement.className = `
-                    p-3 border rounded-lg cursor-pointer transition duration-150
-                    ${isSelected 
-                        ? 'bg-indigo-500 text-white shadow-md border-indigo-500 transform scale-[1.02]' 
-                        : 'bg-white hover:bg-gray-50 border-gray-200'
-                    }
-                `;
-                roomElement.innerHTML = `
-                    <p class="font-bold text-lg">Комната #${roomData.room}</p>
-                    <p class="text-sm ${isSelected ? 'text-indigo-200' : 'text-gray-600'} truncate">${roomData.title || 'Тест без названия'}</p>
-                    <p class="text-xs ${isSelected ? 'text-indigo-300' : 'text-gray-400'} mt-1">Последний тест: ${lastUpdate}</p>
-                `;
-                roomElement.onclick = () => selectRoom(roomData.room);
-                elements.roomList.appendChild(roomElement);
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            appDisplay.textContent = appId;
+
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+                showStatus(`Ошибка аутентификации: ${error.message}`, 'bg-red-100 text-red-800');
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    userDisplay.textContent = userId;
+                } else {
+                    // Используем случайный ID для неаутентифицированных
+                    userId = crypto.randomUUID();
+                    userDisplay.textContent = `Анонимный (${userId.substring(0, 8)}...)`;
+                }
+                isAuthReady = true;
+                loader.classList.add('hidden');
+                testContainer.classList.remove('hidden');
+                submitBtn.disabled = false;
+                loadProgress(); // Попытка загрузить прогресс после аутентификации
+                renderTest();
             });
         }
-        
-        // Выбор комнаты
-        function selectRoom(roomNumber) {
-            state.selectedRoom = roomNumber;
-            const roomData = state.activeRooms[roomNumber];
-            
-            if (roomData) {
-                // Обновляем текущие ответы
-                state.currentAnswers.clear();
-                Object.entries(roomData.answers).forEach(([qId, answerText]) => {
-                    state.currentAnswers.set(qId, answerText);
-                });
-                
-                renderTestView(roomData);
-            }
-            renderRoomList(); // Обновляем подсветку
+
+        // --- Функции Базы Данных (Firestore) ---
+
+        // Приватный путь для сохранения прогресса пользователя
+        function getSubmissionDocRef() {
+            if (!userId) throw new Error("User ID is not defined.");
+            // Путь: /artifacts/{appId}/users/{userId}/test_submissions/{submissionId}
+            return doc(db, 'artifacts', appId, 'users', userId, 'test_submissions', submissionId);
         }
 
-        // --- UI Логика: Текущий тест ---
+        /**
+         * Сохраняет текущий прогресс теста на сервере.
+         * Используется для сохранения данных, когда клиент "обновляет страницу".
+         * @param {boolean} isSubmitted - Флаг, указывающий, что тест отправлен.
+         */
+        async function saveProgress(isSubmitted = false) {
+            if (!isAuthReady || !db || !userId) return;
 
-        function renderTestView(roomData = null) {
-            if (!roomData && !state.selectedRoom) {
-                elements.title.textContent = 'Выберите комнату для начала работы';
-                elements.url.textContent = 'URL: (Не выбрано)';
-                elements.questionsContainer.innerHTML = `
-                    <div class="flex items-center justify-center h-full text-gray-400 text-lg py-20">
-                        Тест будет загружен здесь после выбора комнаты.
-                    </div>
-                `;
-                elements.submitBtn.disabled = true;
-                return;
+            saveStatusDisplay.textContent = 'Сохранение...';
+
+            // Очищаем данные от лишнего (например, imageUrl, чтобы не хранить дубликаты)
+            const submissionData = mockQuestions.map(q => ({
+                id: q.id,
+                userAnswer: q.userAnswer,
+                isSubmitted: isSubmitted
+            }));
+
+            const dataToSave = {
+                timestamp: Date.now(),
+                userId: userId,
+                questions: submissionData,
+                isSubmitted: isSubmitted
+            };
+
+            try {
+                const docRef = getSubmissionDocRef();
+                await setDoc(docRef, dataToSave);
+                saveStatusDisplay.textContent = isSubmitted ? 'Ответы успешно отправлены!' : 'Прогресс сохранен.';
+                showStatus(isSubmitted ? 'Ответы отправлены и прогресс сохранен на сервере!' : 'Прогресс автоматически сохранен.', 'bg-green-100 text-green-800');
+            } catch (error) {
+                console.error("Ошибка сохранения прогресса:", error);
+                saveStatusDisplay.textContent = 'Ошибка сохранения!';
+                showStatus('Ошибка сохранения прогресса. См. консоль.', 'bg-red-100 text-red-800');
             }
-
-            const currentRoom = roomData || state.activeRooms[state.selectedRoom];
-            if (!currentRoom) return;
-
-            elements.title.textContent = currentRoom.title || `Тест из Комнаты #${currentRoom.room}`;
-            elements.url.textContent = `URL: ${currentRoom.url}`;
-            elements.submitBtn.disabled = false;
-            
-            renderQuestions(currentRoom.questions);
         }
 
-        // Рендеринг вопросов
-        function renderQuestions(questions) {
-            elements.questionsContainer.innerHTML = '';
-            
-            questions.forEach(q => {
-                const currentAnswer = state.currentAnswers.get(q.id) || '';
+        /**
+         * Загружает ранее сохраненный прогресс из Firestore.
+         */
+        async function loadProgress() {
+             if (!isAuthReady || !db || !userId) return;
+
+             try {
+                const docRef = getSubmissionDocRef();
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    data.questions.forEach(savedQ => {
+                        const localQ = mockQuestions.find(q => q.id === savedQ.id);
+                        if (localQ) {
+                            localQ.userAnswer = savedQ.userAnswer;
+                        }
+                    });
+                    
+                    // Если тест был отправлен, показываем правильные ответы и блокируем форму
+                    if (data.isSubmitted) {
+                        finalizeTest();
+                    }
+
+                    showStatus('Прогресс загружен с сервера. Продолжайте.', 'bg-blue-100 text-blue-800');
+                    renderTest(); // Перерисовываем тест с загруженными ответами
+                } else {
+                    showStatus('Новый тест. Прогресс не найден.', 'bg-gray-100 text-gray-800');
+                }
+            } catch (error) {
+                console.error("Ошибка загрузки прогресса:", error);
+            }
+        }
+
+        /**
+         * Имитация действия администратора: удаление прогресса.
+         * Выполняет требование: "исчезает на сервере, когда админ отправил ответ"
+         */
+        async function deleteProgress() {
+            if (!isAuthReady || !db || !userId) return;
+
+            try {
+                const docRef = getSubmissionDocRef();
+                await deleteDoc(docRef);
                 
+                // Сброс локального состояния
+                mockQuestions.forEach(q => q.userAnswer = null);
+                submissionId = 'user_submission_' + Date.now(); // Новый ID для новой попытки
+                
+                showStatus('Имитация: Прогресс был удален администратором. Начните тест заново.', 'bg-yellow-100 text-yellow-800');
+                saveStatusDisplay.textContent = 'Ожидание действия...';
+                renderTest(); // Перерисовываем тест
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Отправить ответы и сохранить прогресс';
+                adminDeleteBtn.disabled = true; // Сбрасываем кнопку удаления
+            } catch (error) {
+                 console.error("Ошибка удаления прогресса:", error);
+                 showStatus('Ошибка удаления прогресса. См. консоль.', 'bg-red-100 text-red-800');
+            }
+        }
+
+        // --- Логика Интерфейса и Рендеринга ---
+
+        function showStatus(message, className) {
+            statusMessage.className = `p-4 rounded-lg text-sm font-medium ${className}`;
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden');
+        }
+
+        /**
+         * Обновляет ответ пользователя локально.
+         */
+        function handleOptionChange(questionId, answer) {
+            const question = mockQuestions.find(q => q.id === questionId);
+            if (question) {
+                question.userAnswer = answer;
+                // Автоматическое сохранение прогресса при каждом изменении (имитация "обновления страницы")
+                saveProgress(false); 
+            }
+        }
+
+        /**
+         * Рендерит вопросы теста на основе mockQuestions.
+         */
+        function renderTest() {
+            testContainer.innerHTML = '';
+            
+            const isSubmitted = mockQuestions.every(q => q.userAnswer !== null && submitBtn.disabled);
+
+            mockQuestions.forEach(q => {
                 const questionElement = document.createElement('div');
-                questionElement.className = 'p-5 border border-gray-200 rounded-lg shadow-sm bg-white hover:shadow-md transition duration-200';
-                questionElement.setAttribute('data-question-id', q.id);
+                questionElement.className = 'p-6 bg-gray-50 rounded-xl shadow-lg border border-gray-200 space-y-4';
                 questionElement.innerHTML = `
-                    <h4 class="text-lg font-semibold mb-3 text-gray-700">
-                        ${q.number}. ${q.text}
-                    </h4>
-                    <p class="font-medium text-sm text-indigo-500 mb-2">
-                        Ваш ответ: <span id="answer-display-${q.id}" class="font-bold">${currentAnswer || 'Ожидание ответа...'}</span>
-                    </p>
-                    <div class="space-y-2 mb-4">
-                        ${q.options.map((opt, index) => {
-                            const optText = opt.text.trim().replace(/"/g, '&quot;');
-                            const isSelected = currentAnswer === optText;
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">${q.id}. ${q.question}</h2>
+                    <!-- Картинка приходит из тестов (Пункт 1) -->
+                    <img src="${q.imageUrl}" alt="Изображение для вопроса ${q.id}" class="w-full h-auto object-cover rounded-lg shadow-inner border border-gray-300" onerror="this.onerror=null;this.src='https://placehold.co/400x200/cccccc/000000?text=Ошибка+Загрузки+Изображения';">
+                    
+                    <div class="options-group space-y-3" data-question-id="${q.id}">
+                        ${q.options.map(option => {
+                            const isCorrect = isSubmitted && option === q.correctAnswer;
+                            const isSelected = q.userAnswer === option;
                             
+                            let classes = 'p-3 rounded-lg border-2 transition duration-150 ease-in-out cursor-pointer hover:shadow-md';
+                            
+                            if (isSubmitted) {
+                                // Если тест отправлен, показываем правильный/неправильный ответ
+                                if (isCorrect) {
+                                    classes += ' bg-green-100 border-green-500 font-semibold correct-answer-visible';
+                                } else if (isSelected) {
+                                    classes += ' bg-red-100 border-red-500';
+                                } else {
+                                    classes += ' border-gray-300 text-gray-700';
+                                }
+                            } else {
+                                // Во время прохождения теста
+                                classes += isSelected ? ' bg-indigo-100 border-indigo-500 font-semibold' : ' border-gray-300 hover:bg-gray-100';
+                            }
+                            
+                            // Пункт 4: Изменение курсора на правильном ответе (только после отправки)
+                            // Класс correct-answer-visible делает это через CSS при наведении
+                            const cursorClass = isCorrect ? 'correct-answer-visible' : '';
+
                             return `
-                                <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-all duration-150 ${isSelected ? 'bg-green-50 border-green-400 ring-2 ring-green-500' : 'bg-gray-50 hover:bg-gray-100'}">
-                                    <input 
-                                        type="radio" 
-                                        name="q-${q.id}" 
-                                        value="${optText}"
-                                        class="mt-1 mr-3 w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                        ${isSelected ? 'checked' : ''}
-                                        onchange="handleAnswerChange('${q.id}', this.value)"
-                                    >
-                                    <span class="text-gray-800 text-sm font-medium leading-relaxed">${optText}</span>
-                                </label>
+                                <div 
+                                    class="${classes} ${cursorClass}" 
+                                    data-answer="${option}"
+                                    data-question-id="${q.id}"
+                                    onclick="window.handleOptionClick(${q.id}, '${option.replace(/'/g, "\\'")}')"
+                                    ${isSubmitted ? 'style="pointer-events: none;"' : ''}
+                                >
+                                    ${option}
+                                </div>
                             `;
                         }).join('')}
                     </div>
-                    
-                    <!-- Альтернативный ввод (если не подходит мультивыбор) -->
-                    <div class="mt-4">
-                        <label for="input-${q.id}" class="block text-sm font-medium text-gray-700 mb-1">
-                            Ввести ответ вручную:
-                        </label>
-                        <input 
-                            type="text" 
-                            id="input-${q.id}" 
-                            value="${currentAnswer}" 
-                            class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2"
-                            onblur="handleManualAnswerChange('${q.id}', this.value)"
-                        >
-                    </div>
                 `;
-                elements.questionsContainer.appendChild(questionElement);
-            });
-        }
-        
-        // Обработчик выбора ответа (Radio)
-        window.handleAnswerChange = function(questionId, answerText) {
-            const oldAnswer = state.currentAnswers.get(questionId);
-            if (oldAnswer !== answerText) {
-                state.currentAnswers.set(questionId, answerText);
-                document.getElementById(`answer-display-${questionId}`).textContent = answerText;
-                // Обновляем и ручной ввод
-                document.getElementById(`input-${questionId}`).value = answerText;
-            }
-        }
-        
-        // Обработчик ручного ввода
-        window.handleManualAnswerChange = function(questionId, answerText) {
-            const trimmedAnswer = answerText.trim();
-            const oldAnswer = state.currentAnswers.get(questionId);
-            
-            if (oldAnswer !== trimmedAnswer) {
-                state.currentAnswers.set(questionId, trimmedAnswer);
-                document.getElementById(`answer-display-${questionId}`).textContent = trimmedAnswer || 'Ожидание ответа...';
-
-                // Снимаем выбор с Radio
-                const radioInputs = document.querySelectorAll(`input[name="q-${questionId}"]`);
-                radioInputs.forEach(input => {
-                    if (input.value === trimmedAnswer) {
-                        input.checked = true;
-                        input.closest('label').classList.add('bg-green-50', 'border-green-400', 'ring-2', 'ring-green-500');
-                    } else {
-                        input.checked = false;
-                        input.closest('label').classList.remove('bg-green-50', 'border-green-400', 'ring-2', 'ring-green-500');
-                    }
-                });
-            }
-        }
-        
-        // Отправка всех ответов
-        function submitAnswers() {
-            if (!isConnected || !state.selectedRoom) {
-                alert('Нет активного подключения или не выбрана комната.');
-                return;
-            }
-            
-            const answersPayload = {};
-            state.currentAnswers.forEach((answer, questionId) => {
-                if (answer && answer.trim() !== '') {
-                    answersPayload[questionId] = { answer: answer.trim() };
-                }
+                testContainer.appendChild(questionElement);
             });
 
-            if (Object.keys(answersPayload).length === 0) {
-                 alert('Пожалуйста, введите хотя бы один ответ.');
-                 return;
+            // Если тест отправлен, активируем кнопку имитации удаления
+            if (isSubmitted) {
+                adminDeleteBtn.disabled = false;
             }
-            
-            // Сохраняем в локальное состояние (для отображения)
-            const roomData = state.activeRooms[state.selectedRoom];
-            if (roomData) {
-                roomData.answers = {};
-                Object.entries(answersPayload).forEach(([qId, data]) => {
-                    roomData.answers[qId] = data.answer;
-                });
-            }
-
-            // Отправляем на сервер
-            socket.send(JSON.stringify({
-                type: 'submit_answers',
-                adminId: adminId,
-                room: state.selectedRoom,
-                answers: answersPayload
-            }));
-
-            // Визуальный фидбек
-            elements.submitBtn.textContent = 'Ответы отправлены!';
-            elements.submitBtn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600');
-            elements.submitBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-
-            setTimeout(() => {
-                elements.submitBtn.textContent = 'Отправить ответы клиенту';
-                elements.submitBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600');
-                elements.submitBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
-            }, 1500);
         }
 
-        // --- Инициализация ---
+        // --- Обработчики Событий ---
 
-        window.onload = function() {
-            connectWebSocket();
-            elements.submitBtn.addEventListener('click', submitAnswers);
+        // Переносим функцию в глобальную область видимости для обработки событий DOM
+        window.handleOptionClick = (questionId, answer) => {
+            const questionDiv = document.querySelector(`.options-group[data-question-id="${questionId}"]`);
+            if (questionDiv.getAttribute('style') && questionDiv.getAttribute('style').includes('none')) {
+                return; // Блокируем клики после отправки
+            }
+
+            handleOptionChange(questionId, answer);
+            renderTest(); // Перерисовать, чтобы показать выбранный ответ
         };
+        
+        // Финализация теста (отправка на сервер)
+        function finalizeTest() {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Ответы отправлены (Тест завершен)';
+            // Убеждаемся, что прогресс сохранен как 'отправленный'
+            saveProgress(true); 
+            // Активируем кнопку имитации администратора
+            adminDeleteBtn.disabled = false;
+
+            // Блокируем дальнейший ввод и показываем результаты
+            mockQuestions.forEach(q => q.userAnswer = q.userAnswer || 'Не отвечено');
+            renderTest();
+        }
+
+        submitBtn.addEventListener('click', finalizeTest);
+        adminDeleteBtn.addEventListener('click', deleteProgress);
+
+
+        // Инициализация
+        initFirebase();
     </script>
 </body>
 </html>
-
