@@ -1,286 +1,850 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сбор ответов теста</title>
-    <!-- Подключаем Tailwind CSS для современного дизайна -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title id="page-title">Панель авторизации</title>
     <style>
-        /* Дополнительные стили, чтобы изображения и радиокнопки отображались корректно */
-        .test-question img, .answers-test img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 0.5rem;
-            margin: 0.5rem 0;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            box-sizing: border-box;
+            background-color: #000;
+            color: #fff;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
-        .answers-test li {
-            list-style: none;
-            margin-bottom: 0.75rem;
+
+        #auth-page-container,
+        #error-page-container,
+        #main-app-container {
+            width: 100%;
+            max-width: 1200px;
+            box-sizing: border-box;
+            flex-grow: 1;
+        }
+
+        #auth-page-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            text-align: center;
+            background-color: #000;
+            color: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #auth-page-content h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        #auth-page-content form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        #auth-page-content input {
+            padding: 10px;
+            font-size: 1em;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #222;
+            color: #fff;
+        }
+        #auth-page-content button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
             cursor: pointer;
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            transition: background-color 0.2s;
-            border: 1px solid #e5e7eb;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
         }
-        .answers-test li:hover {
-            background-color: #f3f4f6;
+        #auth-page-content button:hover {
+            background-color: #0056b3;
         }
-        .answers-test label {
+        #auth-page-content .error-message {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        #error-page-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 40px);
+            text-align: center;
+            background-color: #000;
+            color: #fff;
+        }
+        #error-page-content .error-code {
+            font-size: 8em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        #error-page-content .error-message {
+            font-size: 2em;
+            margin-bottom: 30px;
+        }
+        #error-page-content .link.invisible-link {
+            color: inherit;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        #error-page-content .link.invisible-link:hover {
+            text-decoration: none;
+            color: inherit;
+        }
+        #error-page-content .request-id {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #aaa;
+        }
+        #error-page-content .info-text {
+            font-size: 1em;
+            margin-bottom: 10px;
+        }
+        #error-page-content .info-text .link {
+            color: #007bff;
+            text-decoration: none;
+        }
+        #error-page-content .info-text .link:hover {
+            text-decoration: underline;
+        }
+        #error-page-content .powered-by {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #777;
+        }
+
+        #main-app-content {
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #main-app-content .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #main-app-content .header-container h1 {
+            margin: 0;
+            flex-grow: 1;
+            text-align: center;
+        }
+        #main-app-content button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+        #main-app-content button:hover {
+            background-color: #0056b3;
+        }
+
+        #user-cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .user-card {
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .user-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        .user-card h3 {
+            font-size: 1.2em;
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #4a69bd;
+            word-break: break-all;
+        }
+        .user-card .screenshot-count {
+            font-size: 0.9em;
+            color: #666;
+            font-weight: bold;
+        }
+
+        .no-users-message {
+            text-align: center;
+            grid-column: 1 / -1;
+            font-size: 1.2em;
+            color: #777;
+            padding: 50px;
+        }
+
+        #full-screen-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        #modal-header {
+            width: 100%;
+            max-width: 90vw;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 10px;
+            box-sizing: border-box;
+            position: sticky;
+            top: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 101;
+        }
+
+        #modal-header #modal-close-button {
+            position: static;
+            margin-bottom: 0;
+        }
+
+        #modal-header #screenshot-counter {
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        #modal-screenshots-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding-bottom: 20px;
+            box-sizing: border-box;
+            align-items: center;
+        }
+
+        .screenshot-item {
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        .screenshot-item h3 {
+            font-size: 1.2em;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #4a69bd;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 10px;
+            width: 100%;
+            text-align: left;
+            flex-shrink: 0;
+        }
+        .screenshot-item .image-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 150px;
+        }
+
+        .screenshot-item img {
+            max-width: 100%;
+            max-height: 500px;
+            width: auto;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #f5f5f5;
+            border-radius: 5px;
+            object-fit: contain;
+            background-color: #fff;
+            flex-shrink: 0;
+        }
+
+        .screenshot-item .answer-display {
+            margin-top: 15px;
+            padding: 12px;
+            background-color: #e9f5ff;
+            border-left: 4px solid #007bff;
+            font-size: 0.95em;
+            color: #333;
+            border-radius: 5px;
+            min-height: 3em;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        .screenshot-item textarea {
+            margin-top: 15px;
+            min-height: 60px;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        .screenshot-item .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            width: 100%;
+            flex-shrink: 0;
+        }
+        .screenshot-item .action-buttons button {
+            flex: 1;
+            padding: 12px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
             cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-        .test-variant {
-            font-weight: bold;
-            font-size: 1.125rem;
-            color: #4b5563;
+        .screenshot-item .action-buttons button:hover {
+            transform: translateY(-2px);
         }
-        /* Стили для имитации активного состояния таба (для демонстрации) */
-        .tab-pane.active {
-            display: block;
+        .screenshot-item .submit-button {
+            background-color: #28a745;
+            color: white;
+        }
+        .screenshot-item .submit-button:hover {
+            background-color: #218838;
+        }
+        .screenshot-item .delete-button {
+            background-color: #dc3545;
+            color: white;
+        }
+        .screenshot-item .delete-button:hover {
+            background-color: #c82333;
+        }
+        .screenshot-item .reset-button {
+            background-color: #6c757d;
+            color: white;
+        }
+        .screenshot-item .reset-button:hover {
+            background-color: #5a6268;
+        }
+        .no-screenshots-message {
+            text-align: center;
+            font-size: 1.2em;
+            color: #777;
+            padding: 50px;
+        }
+        .no-screenshots-for-user {
+            text-align: center;
+            width: 100%;
+            font-size: 1.2em;
+            color: #ccc;
+            padding: 50px;
+        }
+
+        @media (max-width: 768px) {
+            #user-cards-container {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+            #modal-screenshots-container {
+                gap: 15px;
+            }
+            .screenshot-item img {
+                max-height: 300px;
+            }
+            .screenshot-item .action-buttons button {
+                padding: 10px;
+                font-size: 0.9em;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100 p-8 font-sans">
-
-    <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-2xl">
-        <h1 class="text-2xl font-bold mb-6 text-indigo-700">Демонстрация сбора ответов теста</h1>
-
-        <form id="test-form">
-            <div class="tab-content space-y-8">
-
-                <!-- Вопрос 1: Имитация tab1 -->
-                <div class="table-test tab-pane active" role="tabpanel" id="tab1">
-                    <div class="test-question mb-4">
-                        <p class="text-lg font-semibold">Вопрос 1: Какова вероятность выпадения "орла" при подбрасывании монеты?</p>
-                        <!-- Заглушка изображения, так как оригинальные ссылки могут быть недоступны -->
-                        <img src="https://placehold.co/600x150/5cb85c/white?text=Question+1" alt="Question 1 Placeholder" class="my-3">
-                    </div>
-                    <div class="label label-info bg-indigo-500 text-white px-3 py-1 rounded inline-block text-sm mb-4">Балл: 3</div>
-                    <div class="test-content m-t-xs">
-                        <ul class="answers-test testing space-y-2">
-                            <li>
-                                <input type="radio" class="test-radio hidden" id="test1-a" name="answers[1]" value="1">
-                                <label for="test1-a" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
-                                    <span class="test-variant mr-4">a</span>
-                                    <p class="mt-0.5">0.25</p>
-                                </label>
-                            </li>
-                            <li>
-                                <input type="radio" class="test-radio hidden" id="test1-b" name="answers[1]" value="2">
-                                <label for="test1-b" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
-                                    <span class="test-variant mr-4">b</span>
-                                    <p class="mt-0.5">0.50</p>
-                                </label>
-                            </li>
-                            <li>
-                                <input type="radio" class="test-radio hidden" id="test1-c" name="answers[1]" value="3">
-                                <label for="test1-c" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
-                                    <span class="test-variant mr-4">c</span>
-                                    <p class="mt-0.5">0.75</p>
-                                </label>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Вопрос 2: Имитация tab2 -->
-                <div class="table-test tab-pane active" role="tabpanel" id="tab2">
-                    <div class="test-question mb-4">
-                        <p class="text-lg font-semibold">Вопрос 2: $2 + 2 = ? $</p>
-                        <img src="https://placehold.co/600x150/d9534f/white?text=Question+2" alt="Question 2 Placeholder" class="my-3">
-                    </div>
-                    <div class="label label-info bg-indigo-500 text-white px-3 py-1 rounded inline-block text-sm mb-4">Балл: 3</div>
-                    <div class="test-content m-t-xs">
-                        <ul class="answers-test testing space-y-2">
-                            <li>
-                                <input type="radio" class="test-radio hidden" id="test2-a" name="answers[2]" value="1">
-                                <label for="test2-a" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
-                                    <span class="test-variant mr-4">a</span>
-                                    <p class="mt-0.5">3</p>
-                                </label>
-                            </li>
-                            <li>
-                                <input type="radio" class="test-radio hidden" id="test2-b" name="answers[2]" value="2">
-                                <label for="test2-b" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
-                                    <span class="test-variant mr-4">b</span>
-                                    <p class="mt-0.5">4</p>
-                                </label>
-                            </li>
-                            <li>
-                                <input type="radio" class="test-radio hidden" id="test2-c" name="answers[2]" value="3">
-                                <label for="test2-c" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
-                                    <span class="test-variant mr-4">c</span>
-                                    <p class="mt-0.5">5</p>
-                                </label>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Кнопка отправки -->
-            <button type="submit" class="mt-8 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 transition duration-300 transform hover:scale-[1.01]">
-                Завершить тест и отправить ответы
-            </button>
-        </form>
-
-        <!-- Контейнер для вывода результата (имитация отправки) -->
-        <div id="results" class="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg hidden">
-            <h3 class="text-xl font-semibold mb-2 text-gray-800">Собранные данные для отправки на сервер:</h3>
-            <pre id="json-output" class="bg-gray-800 text-green-300 p-3 rounded-md overflow-auto text-sm"></pre>
+<body>
+    <div id="auth-page-container">
+        <div id="auth-page-content">
+            <h2 id="auth-title">Вход для администратора</h2>
+            <form id="auth-form">
+                <input type="text" id="username" placeholder="Имя пользователя (например, admin1)" required>
+                <input type="password" id="password" placeholder="Пароль (например, adminXA)" required>
+                <button type="submit" id="auth-submit">Войти</button>
+                <div class="error-message" id="auth-error"></div>
+            </form>
         </div>
+    </div>
 
-        <!-- Модальное окно для сообщения об ошибке -->
-        <div id="error-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
-                <h3 class="text-xl font-bold text-red-600 mb-4">Ошибка отправки</h3>
-                <p id="error-message" class="mb-4">Пожалуйста, ответьте на все вопросы перед отправкой.</p>
-                <button onclick="document.getElementById('error-modal').classList.add('hidden')" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Закрыть</button>
+    <div id="error-page-container">
+        <div id="error-page-content">
+            <div class="error-code">502</div>
+            <div class="error-message">
+                <a href="#" class="link invisible-link" id="bad-gateway-link">Bad</a> Gateway
+            </div>
+            <div class="request-id">Request ID: 95fb249e39e5c6d9-PDX</div>
+            <div class="info-text">Этот сервис в настоящее время недоступен. Пожалуйста, попробуйте снова через несколько минут.</div>
+            <div class="info-text">Если вы являетесь владельцем сайта, обратитесь к <a href="https://render.com/docs" class="link">документации Render</a> для устранения неполадок.</div>
+            <div class="powered-by">Powered by Render</div>
+        </div>
+    </div>
+
+    <div id="main-app-container">
+        <div id="main-app-content">
+            <div class="header-container">
+                <h1>Админ-панель: Пользователи</h1>
+                <button id="refresh-users">Обновить</button>
+            </div>
+            <div id="user-cards-container">
+                <p class="no-users-message" id="no-users-message">Ожидание пользователей...</p>
             </div>
         </div>
+    </div>
 
+    <div id="full-screen-modal">
+        <div id="modal-header">
+            <button id="modal-close-button">Закрыть</button>
+            <span id="screenshot-counter"></span>
+        </div>
+        <div id="modal-screenshots-container">
+        </div>
     </div>
 
     <script>
-        // Имитация API ключа, как требуется в инструкциях
-        const apiKey = "";
+        const authPageContainer = document.getElementById('auth-page-container');
+        const errorPageContainer = document.getElementById('error-page-container');
+        const mainAppContainer = document.getElementById('main-app-container');
+        const authForm = document.getElementById('auth-form');
+        const authError = document.getElementById('auth-error');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const badGatewayLink = document.getElementById('bad-gateway-link');
+        const pageTitle = document.getElementById('page-title');
 
-        // Функция для симуляции задержки и экспоненциального отката
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
+        const userCardsContainer = document.getElementById('user-cards-container');
+        let noUsersMessage = document.getElementById('no-users-message');
+        const refreshUsersButton = document.getElementById('refresh-users');
+        const fullScreenModal = document.getElementById('full-screen-modal');
+        const modalCloseButton = document.getElementById('modal-close-button');
+        const modalScreenshotsContainer = document.getElementById('modal-screenshots-container');
+        const screenshotCounter = document.getElementById('screenshot-counter');
 
-        /**
-         * Собирает выбранные ответы из формы и возвращает объект.
-         * Ожидаемый формат name: answers[N], где N - ID вопроса.
-         * @returns {Object} Объект, где ключ — ID вопроса (N), а значение — value выбранной радиокнопки.
-         */
-        function collectAnswers() {
-            const form = document.getElementById('test-form');
-            const formData = new FormData(form);
-            const answers = {};
-            const questionsAnswered = new Set();
-            const questionIds = []; // Для проверки, на все ли вопросы дан ответ
+        let ws;
+        let authToken = null;
+        let adminId = null;
+        let currentOpenHelperId = null;
+        const users = new Map(); // helperId -> { helperId, clientId, screenshots: [{ questionId, imageUrl, answer }], timestamp }
 
-            // 1. Сбор ответов
-            // Проходим по всем элементам формы
-            for (const [key, value] of formData.entries()) {
-                // Ищем поля с именем, начинающимся на 'answers['
-                if (key.startsWith('answers[')) {
-                    // Извлекаем ID вопроса N из имени 'answers[N]'
-                    const match = key.match(/answers\[(\d+)\]/);
-                    if (match) {
-                        const questionId = match[1];
-                        answers[questionId] = value;
-                        questionsAnswered.add(questionId);
-                    }
+        function showPage(pageName) {
+            authPageContainer.style.display = 'none';
+            errorPageContainer.style.display = 'none';
+            mainAppContainer.style.display = 'none';
+            fullScreenModal.style.display = 'none';
+
+            if (pageName === 'auth') {
+                authPageContainer.style.display = 'flex';
+                document.body.style.backgroundColor = '#000';
+                document.body.style.color = '#fff';
+                pageTitle.textContent = 'Вход для администратора';
+            } else if (pageName === 'error') {
+                errorPageContainer.style.display = 'flex';
+                document.body.style.backgroundColor = '#000';
+                document.body.style.color = '#fff';
+                pageTitle.textContent = '502 Bad Gateway';
+            } else if (pageName === 'main_app') {
+                mainAppContainer.style.display = 'block';
+                document.body.style.backgroundColor = '#f0f2f5';
+                document.body.style.color = '#333';
+                pageTitle.textContent = 'Админ-панель: Пользователи';
+                if (!ws || ws.readyState === WebSocket.CLOSED) {
+                    initWebSocket();
                 }
+                checkNoUsers();
             }
-
-            // 2. Получение списка всех вопросов
-            // Мы ищем все группы радиокнопок по их общему имени 'answers[N]'
-            const radioGroups = form.querySelectorAll('input[type="radio"][name^="answers["]');
-            const uniqueQuestions = new Set();
-            radioGroups.forEach(radio => {
-                const match = radio.name.match(/answers\[(\d+)\]/);
-                if (match) {
-                    uniqueQuestions.add(match[1]);
-                }
-            });
-
-            // 3. Проверка: все ли вопросы отвечены
-            let allAnswered = true;
-            if (questionsAnswered.size !== uniqueQuestions.size) {
-                allAnswered = false;
-            }
-
-            return { answers, allAnswered, totalQuestions: uniqueQuestions.size };
         }
 
-        /**
-         * Имитация отправки данных на сервер (или LLM API, если это нужно).
-         * @param {Object} data Объект с ответами.
-         */
-        async function submitAnswers(data) {
-            // В данном случае мы просто выводим JSON в консоль и на экран
-            // Здесь должна быть логика fetch/XHR для отправки на ваш сервер.
-            // Например:
-            /*
-            const apiUrl = 'https://your.server.com/api/submit-test';
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                const result = await response.json();
-                console.log('Server response:', result);
-                // Обработка успешного ответа
-            } catch (error) {
-                console.error('Error submitting test:', error);
-                // Обработка ошибки
-            }
-            */
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            authError.textContent = '';
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
 
-            // Демонстрация результата:
-            const jsonOutput = document.getElementById('json-output');
-            const resultsDiv = document.getElementById('results');
-
-            jsonOutput.textContent = JSON.stringify(data, null, 2);
-            resultsDiv.classList.remove('hidden');
-
-            console.log('--- Собранные ответы (готовы для отправки) ---');
-            console.log(data);
-            console.log('-------------------------------------------');
-
-            // Имитация вызова LLM API, если бы требовался анализ текста:
-            // const userQuery = `Проанализируй ответы на тест: ${JSON.stringify(data)}`;
-            // await callGeminiApi(userQuery);
-        }
-
-        document.getElementById('test-form').addEventListener('submit', async function(e) {
-            e.preventDefault(); // Предотвращаем стандартную отправку формы
-
-            const { answers, allAnswered, totalQuestions } = collectAnswers();
-
-            if (!allAnswered) {
-                const modal = document.getElementById('error-modal');
-                const message = document.getElementById('error-message');
-                message.textContent = `Пожалуйста, ответьте на все ${totalQuestions} вопросов. Вы ответили на ${Object.keys(answers).length}.`;
-                modal.classList.remove('hidden');
+            if (!username || !password) {
+                authError.textContent = 'Требуются имя пользователя и пароль';
                 return;
             }
 
-            // Создаем финальный объект для отправки
-            const submissionData = {
-                test_id: "your_test_identifier_123", // Добавьте любой идентификатор теста
-                user_id: "current_user_456", // Добавьте ID пользователя
-                answers: answers
-            };
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
 
-            // Отправляем собранные данные
-            await submitAnswers(submissionData);
+                if (response.ok) {
+                    authToken = data.token;
+                    showPage('main_app');
+                } else {
+                    authError.textContent = data.message || 'Ошибка входа. Проверьте имя пользователя и пароль.';
+                }
+            } catch (err) {
+                authError.textContent = 'Ошибка сервера. Попробуйте позже.';
+                console.error('Admin: Ошибка авторизации:', err);
+            }
         });
 
-        // Добавляем класс для визуализации выбранной радиокнопки
-        document.querySelectorAll('.answers-test input[type="radio"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                // Находим UL-контейнер для этой группы вопросов
-                const ul = this.closest('.answers-test');
-                // Сбрасываем стили со всех элементов label в этой группе
-                ul.querySelectorAll('label').forEach(label => {
-                    label.classList.remove('bg-indigo-100', 'ring-2', 'ring-indigo-500');
-                });
-                // Добавляем стили только для выбранного label
-                const currentLabel = ul.querySelector(`label[for="${this.id}"]`);
-                if (currentLabel) {
-                    currentLabel.classList.add('bg-indigo-100', 'ring-2', 'ring-indigo-500');
+        badGatewayLink.addEventListener('click', (event) => {
+            event.preventDefault();
+            showPage('auth');
+        });
+
+        function initWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Admin: WebSocket подключен');
+                ws.send(JSON.stringify({ type: 'admin_connect', role: 'admin' }));
+            };
+
+            ws.onmessage = (event) => {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                    console.log('Admin: Получено сообщение:', data);
+                } catch (err) {
+                    console.error('Admin: Ошибка разбора сообщения:', err);
+                    return;
                 }
-            });
+
+                if (data.type === 'all_screenshots') {
+                    users.clear();
+                    data.screenshots.forEach(ss => {
+                        let user = users.get(ss.helperId);
+                        if (!user) {
+                            user = {
+                                helperId: ss.helperId,
+                                clientId: ss.clientId,
+                                screenshots: [],
+                                timestamp: parseInt(ss.questionId.split('-')[1]) || Date.now()
+                            };
+                            users.set(ss.helperId, user);
+                        }
+                        user.screenshots.push({
+                            questionId: ss.questionId,
+                            imageUrl: ss.imageUrl,
+                            answer: ss.answer
+                        });
+                    });
+                    adminId = data.adminId;
+                    renderUserCards();
+                } else if (data.type === 'new_screenshot') {
+                    let user = users.get(data.helperId);
+                    if (!user) {
+                        user = {
+                            helperId: data.helperId,
+                            clientId: data.clientId,
+                            screenshots: [],
+                            timestamp: parseInt(data.questionId.split('-')[1]) || Date.now()
+                        };
+                        users.set(data.helperId, user);
+                    }
+                    user.screenshots.push({
+                        questionId: data.questionId,
+                        imageUrl: data.imageUrl,
+                        answer: ''
+                    });
+                    renderUserCards();
+                } else if (data.type === 'update_screenshot') {
+                    const user = Array.from(users.values()).find(u => u.screenshots.some(s => s.questionId === data.questionId));
+                    if (user) {
+                        const screenshot = user.screenshots.find(s => s.questionId === data.questionId);
+                        if (screenshot) {
+                            screenshot.answer = data.answer;
+                            if (currentOpenHelperId === user.helperId) {
+                                openScreenshotsModal(user.helperId);
+                            }
+                            renderUserCards();
+                        }
+                    }
+                } else if (data.type === 'screenshot_deleted') {
+                    const user = Array.from(users.values()).find(u => u.screenshots.some(s => s.questionId === data.questionId));
+                    if (user) {
+                        user.screenshots = user.screenshots.filter(s => s.questionId !== data.questionId);
+                        if (user.screenshots.length === 0) {
+                            users.delete(user.helperId);
+                        }
+                        renderUserCards();
+                        if (currentOpenHelperId === user.helperId) {
+                            if (user.screenshots.length > 0) {
+                                openScreenshotsModal(user.helperId);
+                            } else {
+                                closeScreenshotsModal();
+                            }
+                        }
+                    }
+                } else if (data.type === 'helper_deleted') {
+                    users.delete(data.helperId);
+                    renderUserCards();
+                    if (currentOpenHelperId === data.helperId) {
+                        closeScreenshotsModal();
+                    }
+                } else if (data.type === 'error') {
+                    console.error('Admin: Ошибка сервера:', data.message);
+                    alert(data.message);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('Admin: WebSocket отключен. Переподключение через 2 секунды...');
+                setTimeout(initWebSocket, 2000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('Admin: Ошибка WebSocket:', error);
+                showPage('error');
+            };
+        }
+
+        function renderUserCards() {
+            userCardsContainer.innerHTML = '';
+            const sortedUsers = Array.from(users.values()).sort((a, b) => b.timestamp - a.timestamp);
+            if (sortedUsers.length === 0) {
+                if (!noUsersMessage) {
+                    noUsersMessage = document.createElement('p');
+                    noUsersMessage.className = 'no-users-message';
+                    noUsersMessage.id = 'no-users-message';
+                    userCardsContainer.appendChild(noUsersMessage);
+                }
+                noUsersMessage.style.display = 'block';
+                noUsersMessage.textContent = 'Ожидание пользователей...';
+            } else {
+                sortedUsers.forEach(user => {
+                    const card = document.createElement('div');
+                    card.className = 'user-card';
+                    card.dataset.helperId = user.helperId;
+                    card.addEventListener('click', () => openScreenshotsModal(user.helperId));
+
+                    const h3 = document.createElement('h3');
+                    h3.textContent = `Пользователь: ${user.helperId}`;
+                    card.appendChild(h3);
+
+                    const countDiv = document.createElement('div');
+                    countDiv.className = 'screenshot-count';
+                    countDiv.textContent = `Скриншотов: ${user.screenshots.length}`;
+                    card.appendChild(countDiv);
+
+                    userCardsContainer.appendChild(card);
+                });
+                if (noUsersMessage) {
+                    noUsersMessage.style.display = 'none';
+                }
+            }
+        }
+
+        function checkNoUsers() {
+            if (users.size === 0) {
+                if (!noUsersMessage) {
+                    noUsersMessage = document.createElement('p');
+                    noUsersMessage.className = 'no-users-message';
+                    noUsersMessage.id = 'no-users-message';
+                    userCardsContainer.appendChild(noUsersMessage);
+                }
+                noUsersMessage.style.display = 'block';
+                noUsersMessage.textContent = 'Ожидание пользователей...';
+            } else {
+                if (noUsersMessage) {
+                    noUsersMessage.style.display = 'none';
+                }
+            }
+        }
+
+        function openScreenshotsModal(helperId) {
+            currentOpenHelperId = helperId;
+            const user = users.get(helperId);
+            modalScreenshotsContainer.innerHTML = '';
+
+            if (!user || user.screenshots.length === 0) {
+                modalScreenshotsContainer.innerHTML = '<p class="no-screenshots-for-user">Для этого пользователя пока нет скриншотов.</p>';
+                screenshotCounter.textContent = '';
+            } else {
+                user.screenshots.sort((a, b) => {
+                    const timeA = parseInt(a.questionId.split('-')[1]) || 0;
+                    const timeB = parseInt(b.questionId.split('-')[1]) || 0;
+                    return timeB - timeA;
+                }).forEach(ss => {
+                    const screenshotItem = document.createElement('div');
+                    screenshotItem.className = 'screenshot-item';
+                    screenshotItem.dataset.questionId = ss.questionId;
+
+                    const h3 = document.createElement('h3');
+                    const filename = ss.questionId.split('/').pop();
+                    const parts = filename.split('-');
+                    const screenshotNumber = parts[parts.length - 1].replace('.png', '');
+                    h3.textContent = `Скриншот: ${screenshotNumber} (ClientId: ${user.clientId})`;
+                    screenshotItem.appendChild(h3);
+
+                    const imageWrapper = document.createElement('div');
+                    imageWrapper.className = 'image-wrapper';
+                    screenshotItem.appendChild(imageWrapper);
+
+                    const img = document.createElement('img');
+                    img.src = ss.imageUrl;
+                    img.alt = `Скриншот ${ss.questionId}`;
+                    img.onerror = () => console.error(`Admin: Ошибка загрузки изображения: ${ss.imageUrl}`);
+                    img.onload = () => console.log(`Admin: Изображение загружено: ${ss.imageUrl}`);
+                    imageWrapper.appendChild(img);
+
+                    const answerDisplay = document.createElement('div');
+                    answerDisplay.className = 'answer-display';
+                    answerDisplay.textContent = ss.answer ? `Ответ: ${ss.answer}` : 'Ожидание ответа...';
+                    screenshotItem.appendChild(answerDisplay);
+
+                    const textarea = document.createElement('textarea');
+                    textarea.placeholder = 'Введите ответ...';
+                    textarea.value = ss.answer || '';
+                    screenshotItem.appendChild(textarea);
+
+                    const actionButtonsDiv = document.createElement('div');
+                    actionButtonsDiv.className = 'action-buttons';
+                    screenshotItem.appendChild(actionButtonsDiv);
+
+                    const submitButton = document.createElement('button');
+                    submitButton.textContent = 'Отправить ответ';
+                    submitButton.className = 'submit-button';
+                    submitButton.onclick = () => sendAnswer(ss.questionId, textarea.value, user.clientId);
+                    actionButtonsDiv.appendChild(submitButton);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Удалить';
+                    deleteButton.className = 'delete-button';
+                    deleteButton.onclick = () => deleteScreenshot(ss.questionId);
+                    actionButtonsDiv.appendChild(deleteButton);
+
+                    const resetButton = document.createElement('button');
+                    resetButton.textContent = 'Сбросить ответ';
+                    resetButton.className = 'reset-button';
+                    resetButton.onclick = () => resetAnswer(ss.questionId, textarea, user.clientId);
+                    actionButtonsDiv.appendChild(resetButton);
+
+                    modalScreenshotsContainer.appendChild(screenshotItem);
+                });
+
+                screenshotCounter.textContent = `Скриншотов: ${user.screenshots.length}`;
+            }
+            fullScreenModal.style.display = 'flex';
+        }
+
+        function closeScreenshotsModal() {
+            fullScreenModal.style.display = 'none';
+            currentOpenHelperId = null;
+            modalScreenshotsContainer.innerHTML = '';
+        }
+
+        modalCloseButton.addEventListener('click', closeScreenshotsModal);
+
+        function sendAnswer(questionId, answer, clientId) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'submit_answer',
+                    questionId,
+                    answer,
+                    adminId,
+                    clientId
+                }));
+                console.log(`Admin: Отправлен ответ для questionId: ${questionId}, clientId: ${clientId}, adminId: ${adminId}`);
+            } else {
+                console.error('Admin: WebSocket не подключен. Невозможно отправить ответ.');
+                showPage('error');
+            }
+        }
+
+        function deleteScreenshot(questionId) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                if (confirm('Вы уверены, что хотите удалить этот скриншот? Это действие безвозвратно удалит его с сервера!')) {
+                    ws.send(JSON.stringify({
+                        type: 'delete_screenshot',
+                        questionId,
+                        adminId
+                    }));
+                    console.log(`Admin: Отправлен запрос на удаление скриншота ${questionId}, adminId: ${adminId}`);
+                }
+            } else {
+                console.error('Admin: WebSocket не подключен. Невозможно отправить запрос на удаление.');
+                showPage('error');
+            }
+        }
+
+        function resetAnswer(questionId, textarea, clientId) {
+            textarea.value = '';
+            sendAnswer(questionId, '', clientId);
+            console.log(`Admin: Ответ для ${questionId} сброшен, clientId: ${clientId}, adminId: ${adminId}`);
+        }
+
+        function refreshUsers() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'request_all_screenshots',
+                    role: 'admin',
+                    adminId
+                }));
+                console.log(`Admin: Запрошены все скриншоты, adminId: ${adminId}`);
+            } else {
+                console.error('Admin: WebSocket не подключен. Невозможно запросить скриншоты.');
+                showPage('error');
+            }
+        }
+
+        refreshUsersButton.addEventListener('click', refreshUsers);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            showPage('auth');
         });
     </script>
 </body>
