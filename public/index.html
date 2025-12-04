@@ -3,381 +3,285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Интерактивный Тест</title>
-    <!-- Подключение Tailwind CSS -->
+    <title>Сбор ответов теста</title>
+    <!-- Подключаем Tailwind CSS для современного дизайна -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Настройка шрифта Inter -->
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f7f7f9;
+        /* Дополнительные стили, чтобы изображения и радиокнопки отображались корректно */
+        .test-question img, .answers-test img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         }
-        /* Пользовательский CSS для изменения курсора */
-        .correct-answer-visible:hover {
-            cursor: help !important; /* Курсор меняется на 'help' (знак вопроса) */
-            box-shadow: 0 0 10px rgba(76, 175, 80, 0.7);
+        .answers-test li {
+            list-style: none;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+            border: 1px solid #e5e7eb;
+        }
+        .answers-test li:hover {
+            background-color: #f3f4f6;
+        }
+        .answers-test label {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            cursor: pointer;
+        }
+        .test-variant {
+            font-weight: bold;
+            font-size: 1.125rem;
+            color: #4b5563;
+        }
+        /* Стили для имитации активного состояния таба (для демонстрации) */
+        .tab-pane.active {
+            display: block;
         }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="bg-gray-100 p-8 font-sans">
 
-    <div id="app" class="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-2xl space-y-8">
-        <h1 class="text-3xl font-extrabold text-gray-900 border-b pb-3 mb-6">Интерактивный Тест с Сохранением Данных</h1>
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-2xl">
+        <h1 class="text-2xl font-bold mb-6 text-indigo-700">Демонстрация сбора ответов теста</h1>
 
-        <div id="status-message" class="p-4 rounded-lg text-sm font-medium hidden"></div>
-        <div id="loader" class="text-center text-blue-600 font-semibold">Загрузка данных и аутентификация...</div>
+        <form id="test-form">
+            <div class="tab-content space-y-8">
 
-        <div id="test-container" class="space-y-12 hidden">
-            <!-- Вопросы будут загружены сюда -->
-        </div>
+                <!-- Вопрос 1: Имитация tab1 -->
+                <div class="table-test tab-pane active" role="tabpanel" id="tab1">
+                    <div class="test-question mb-4">
+                        <p class="text-lg font-semibold">Вопрос 1: Какова вероятность выпадения "орла" при подбрасывании монеты?</p>
+                        <!-- Заглушка изображения, так как оригинальные ссылки могут быть недоступны -->
+                        <img src="https://placehold.co/600x150/5cb85c/white?text=Question+1" alt="Question 1 Placeholder" class="my-3">
+                    </div>
+                    <div class="label label-info bg-indigo-500 text-white px-3 py-1 rounded inline-block text-sm mb-4">Балл: 3</div>
+                    <div class="test-content m-t-xs">
+                        <ul class="answers-test testing space-y-2">
+                            <li>
+                                <input type="radio" class="test-radio hidden" id="test1-a" name="answers[1]" value="1">
+                                <label for="test1-a" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
+                                    <span class="test-variant mr-4">a</span>
+                                    <p class="mt-0.5">0.25</p>
+                                </label>
+                            </li>
+                            <li>
+                                <input type="radio" class="test-radio hidden" id="test1-b" name="answers[1]" value="2">
+                                <label for="test1-b" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
+                                    <span class="test-variant mr-4">b</span>
+                                    <p class="mt-0.5">0.50</p>
+                                </label>
+                            </li>
+                            <li>
+                                <input type="radio" class="test-radio hidden" id="test1-c" name="answers[1]" value="3">
+                                <label for="test1-c" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
+                                    <span class="test-variant mr-4">c</span>
+                                    <p class="mt-0.5">0.75</p>
+                                </label>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
 
-        <div id="controls" class="flex flex-col sm:flex-row gap-4 pt-6 border-t">
-            <button id="submit-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md disabled:opacity-50" disabled>
-                Отправить ответы и сохранить прогресс
+                <!-- Вопрос 2: Имитация tab2 -->
+                <div class="table-test tab-pane active" role="tabpanel" id="tab2">
+                    <div class="test-question mb-4">
+                        <p class="text-lg font-semibold">Вопрос 2: $2 + 2 = ? $</p>
+                        <img src="https://placehold.co/600x150/d9534f/white?text=Question+2" alt="Question 2 Placeholder" class="my-3">
+                    </div>
+                    <div class="label label-info bg-indigo-500 text-white px-3 py-1 rounded inline-block text-sm mb-4">Балл: 3</div>
+                    <div class="test-content m-t-xs">
+                        <ul class="answers-test testing space-y-2">
+                            <li>
+                                <input type="radio" class="test-radio hidden" id="test2-a" name="answers[2]" value="1">
+                                <label for="test2-a" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
+                                    <span class="test-variant mr-4">a</span>
+                                    <p class="mt-0.5">3</p>
+                                </label>
+                            </li>
+                            <li>
+                                <input type="radio" class="test-radio hidden" id="test2-b" name="answers[2]" value="2">
+                                <label for="test2-b" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
+                                    <span class="test-variant mr-4">b</span>
+                                    <p class="mt-0.5">4</p>
+                                </label>
+                            </li>
+                            <li>
+                                <input type="radio" class="test-radio hidden" id="test2-c" name="answers[2]" value="3">
+                                <label for="test2-c" class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:border-indigo-400 transition">
+                                    <span class="test-variant mr-4">c</span>
+                                    <p class="mt-0.5">5</p>
+                                </label>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопка отправки -->
+            <button type="submit" class="mt-8 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 transition duration-300 transform hover:scale-[1.01]">
+                Завершить тест и отправить ответы
             </button>
-            <button id="admin-delete-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md disabled:opacity-50">
-                Имитация: Админ отправил ответ (Удалить прогресс)
-            </button>
+        </form>
+
+        <!-- Контейнер для вывода результата (имитация отправки) -->
+        <div id="results" class="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg hidden">
+            <h3 class="text-xl font-semibold mb-2 text-gray-800">Собранные данные для отправки на сервер:</h3>
+            <pre id="json-output" class="bg-gray-800 text-green-300 p-3 rounded-md overflow-auto text-sm"></pre>
         </div>
 
-        <div id="debug-info" class="text-xs text-gray-500 pt-8 border-t mt-8">
-            <h3 class="font-bold mb-2">Отладочная информация:</h3>
-            <p>ID Приложения: <span id="app-id-display"></span></p>
-            <p>ID Пользователя: <span id="user-id-display"></span></p>
-            <p>Статус сохранения: <span id="save-status">Ожидание действия...</span></p>
+        <!-- Модальное окно для сообщения об ошибке -->
+        <div id="error-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                <h3 class="text-xl font-bold text-red-600 mb-4">Ошибка отправки</h3>
+                <p id="error-message" class="mb-4">Пожалуйста, ответьте на все вопросы перед отправкой.</p>
+                <button onclick="document.getElementById('error-modal').classList.add('hidden')" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Закрыть</button>
+            </div>
         </div>
+
     </div>
 
-    <!-- Firebase Imports -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Включение логов Firestore для отладки
-        setLogLevel('Debug');
+    <script>
+        // Имитация API ключа, как требуется в инструкциях
+        const apiKey = "";
 
-        // Глобальные переменные, предоставленные Canvas
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Переменные Firebase
-        let app;
-        let db;
-        let auth;
-        let userId = null;
-        let submissionId = 'user_submission_' + Date.now(); // Уникальный ID для этой сессии/попытки
-        let isAuthReady = false;
+        // Функция для симуляции задержки и экспоненциального отката
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
 
-        // Элементы DOM
-        const appDisplay = document.getElementById('app-id-display');
-        const userDisplay = document.getElementById('user-id-display');
-        const loader = document.getElementById('loader');
-        const testContainer = document.getElementById('test-container');
-        const statusMessage = document.getElementById('status-message');
-        const saveStatusDisplay = document.getElementById('save-status');
-        const submitBtn = document.getElementById('submit-btn');
-        const adminDeleteBtn = document.getElementById('admin-delete-btn');
+        /**
+         * Собирает выбранные ответы из формы и возвращает объект.
+         * Ожидаемый формат name: answers[N], где N - ID вопроса.
+         * @returns {Object} Объект, где ключ — ID вопроса (N), а значение — value выбранной радиокнопки.
+         */
+        function collectAnswers() {
+            const form = document.getElementById('test-form');
+            const formData = new FormData(form);
+            const answers = {};
+            const questionsAnswered = new Set();
+            const questionIds = []; // Для проверки, на все ли вопросы дан ответ
 
-        // Моковый набор вопросов (включая URL изображения)
-        const mockQuestions = [
-            {
-                id: 1,
-                question: "Какое геометрическое тело представлено на изображении?",
-                imageUrl: "https://placehold.co/400x200/4c77aa/ffffff?text=Трехмерная+Фигура",
-                options: ["Куб", "Пирамида", "Сфера", "Цилиндр"],
-                correctAnswer: "Сфера",
-                userAnswer: null
-            },
-            {
-                id: 2,
-                question: "Кто является автором романа 'Война и мир'?",
-                imageUrl: "https://placehold.co/400x200/8d6e63/ffffff?text=Старинная+Книга",
-                options: ["Ф.М. Достоевский", "Л.Н. Толстой", "А.П. Чехов", "И.С. Тургенев"],
-                correctAnswer: "Л.Н. Толстой",
-                userAnswer: null
-            },
-             {
-                id: 3,
-                question: "Какой элемент имеет атомный номер 1?",
-                imageUrl: "https://placehold.co/400x200/9ccc65/ffffff?text=Атом",
-                options: ["Кислород", "Гелий", "Водород", "Углерод"],
-                correctAnswer: "Водород",
-                userAnswer: null
+            // 1. Сбор ответов
+            // Проходим по всем элементам формы
+            for (const [key, value] of formData.entries()) {
+                // Ищем поля с именем, начинающимся на 'answers['
+                if (key.startsWith('answers[')) {
+                    // Извлекаем ID вопроса N из имени 'answers[N]'
+                    const match = key.match(/answers\[(\d+)\]/);
+                    if (match) {
+                        const questionId = match[1];
+                        answers[questionId] = value;
+                        questionsAnswered.add(questionId);
+                    }
+                }
             }
-        ];
 
-        // --- Firebase Инициализация и Аутентификация ---
+            // 2. Получение списка всех вопросов
+            // Мы ищем все группы радиокнопок по их общему имени 'answers[N]'
+            const radioGroups = form.querySelectorAll('input[type="radio"][name^="answers["]');
+            const uniqueQuestions = new Set();
+            radioGroups.forEach(radio => {
+                const match = radio.name.match(/answers\[(\d+)\]/);
+                if (match) {
+                    uniqueQuestions.add(match[1]);
+                }
+            });
 
-        async function initFirebase() {
-            if (Object.keys(firebaseConfig).length === 0) {
-                console.error("Firebase config is missing.");
-                showStatus('Ошибка: Конфигурация Firebase не найдена.', 'bg-red-100 text-red-800');
-                loader.textContent = "Ошибка загрузки: Проверьте конфигурацию Firebase.";
+            // 3. Проверка: все ли вопросы отвечены
+            let allAnswered = true;
+            if (questionsAnswered.size !== uniqueQuestions.size) {
+                allAnswered = false;
+            }
+
+            return { answers, allAnswered, totalQuestions: uniqueQuestions.size };
+        }
+
+        /**
+         * Имитация отправки данных на сервер (или LLM API, если это нужно).
+         * @param {Object} data Объект с ответами.
+         */
+        async function submitAnswers(data) {
+            // В данном случае мы просто выводим JSON в консоль и на экран
+            // Здесь должна быть логика fetch/XHR для отправки на ваш сервер.
+            // Например:
+            /*
+            const apiUrl = 'https://your.server.com/api/submit-test';
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                console.log('Server response:', result);
+                // Обработка успешного ответа
+            } catch (error) {
+                console.error('Error submitting test:', error);
+                // Обработка ошибки
+            }
+            */
+
+            // Демонстрация результата:
+            const jsonOutput = document.getElementById('json-output');
+            const resultsDiv = document.getElementById('results');
+
+            jsonOutput.textContent = JSON.stringify(data, null, 2);
+            resultsDiv.classList.remove('hidden');
+
+            console.log('--- Собранные ответы (готовы для отправки) ---');
+            console.log(data);
+            console.log('-------------------------------------------');
+
+            // Имитация вызова LLM API, если бы требовался анализ текста:
+            // const userQuery = `Проанализируй ответы на тест: ${JSON.stringify(data)}`;
+            // await callGeminiApi(userQuery);
+        }
+
+        document.getElementById('test-form').addEventListener('submit', async function(e) {
+            e.preventDefault(); // Предотвращаем стандартную отправку формы
+
+            const { answers, allAnswered, totalQuestions } = collectAnswers();
+
+            if (!allAnswered) {
+                const modal = document.getElementById('error-modal');
+                const message = document.getElementById('error-message');
+                message.textContent = `Пожалуйста, ответьте на все ${totalQuestions} вопросов. Вы ответили на ${Object.keys(answers).length}.`;
+                modal.classList.remove('hidden');
                 return;
             }
 
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            
-            appDisplay.textContent = appId;
-
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Firebase Auth Error:", error);
-                showStatus(`Ошибка аутентификации: ${error.message}`, 'bg-red-100 text-red-800');
-            }
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    userDisplay.textContent = userId;
-                } else {
-                    // Используем случайный ID для неаутентифицированных
-                    userId = crypto.randomUUID();
-                    userDisplay.textContent = `Анонимный (${userId.substring(0, 8)}...)`;
-                }
-                isAuthReady = true;
-                loader.classList.add('hidden');
-                testContainer.classList.remove('hidden');
-                submitBtn.disabled = false;
-                loadProgress(); // Попытка загрузить прогресс после аутентификации
-                renderTest();
-            });
-        }
-
-        // --- Функции Базы Данных (Firestore) ---
-
-        // Приватный путь для сохранения прогресса пользователя
-        function getSubmissionDocRef() {
-            if (!userId) throw new Error("User ID is not defined.");
-            // Путь: /artifacts/{appId}/users/{userId}/test_submissions/{submissionId}
-            return doc(db, 'artifacts', appId, 'users', userId, 'test_submissions', submissionId);
-        }
-
-        /**
-         * Сохраняет текущий прогресс теста на сервере.
-         * Используется для сохранения данных, когда клиент "обновляет страницу".
-         * @param {boolean} isSubmitted - Флаг, указывающий, что тест отправлен.
-         */
-        async function saveProgress(isSubmitted = false) {
-            if (!isAuthReady || !db || !userId) return;
-
-            saveStatusDisplay.textContent = 'Сохранение...';
-
-            // Очищаем данные от лишнего (например, imageUrl, чтобы не хранить дубликаты)
-            const submissionData = mockQuestions.map(q => ({
-                id: q.id,
-                userAnswer: q.userAnswer,
-                isSubmitted: isSubmitted
-            }));
-
-            const dataToSave = {
-                timestamp: Date.now(),
-                userId: userId,
-                questions: submissionData,
-                isSubmitted: isSubmitted
+            // Создаем финальный объект для отправки
+            const submissionData = {
+                test_id: "your_test_identifier_123", // Добавьте любой идентификатор теста
+                user_id: "current_user_456", // Добавьте ID пользователя
+                answers: answers
             };
 
-            try {
-                const docRef = getSubmissionDocRef();
-                await setDoc(docRef, dataToSave);
-                saveStatusDisplay.textContent = isSubmitted ? 'Ответы успешно отправлены!' : 'Прогресс сохранен.';
-                showStatus(isSubmitted ? 'Ответы отправлены и прогресс сохранен на сервере!' : 'Прогресс автоматически сохранен.', 'bg-green-100 text-green-800');
-            } catch (error) {
-                console.error("Ошибка сохранения прогресса:", error);
-                saveStatusDisplay.textContent = 'Ошибка сохранения!';
-                showStatus('Ошибка сохранения прогресса. См. консоль.', 'bg-red-100 text-red-800');
-            }
-        }
+            // Отправляем собранные данные
+            await submitAnswers(submissionData);
+        });
 
-        /**
-         * Загружает ранее сохраненный прогресс из Firestore.
-         */
-        async function loadProgress() {
-             if (!isAuthReady || !db || !userId) return;
-
-             try {
-                const docRef = getSubmissionDocRef();
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    data.questions.forEach(savedQ => {
-                        const localQ = mockQuestions.find(q => q.id === savedQ.id);
-                        if (localQ) {
-                            localQ.userAnswer = savedQ.userAnswer;
-                        }
-                    });
-                    
-                    // Если тест был отправлен, показываем правильные ответы и блокируем форму
-                    if (data.isSubmitted) {
-                        finalizeTest();
-                    }
-
-                    showStatus('Прогресс загружен с сервера. Продолжайте.', 'bg-blue-100 text-blue-800');
-                    renderTest(); // Перерисовываем тест с загруженными ответами
-                } else {
-                    showStatus('Новый тест. Прогресс не найден.', 'bg-gray-100 text-gray-800');
+        // Добавляем класс для визуализации выбранной радиокнопки
+        document.querySelectorAll('.answers-test input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                // Находим UL-контейнер для этой группы вопросов
+                const ul = this.closest('.answers-test');
+                // Сбрасываем стили со всех элементов label в этой группе
+                ul.querySelectorAll('label').forEach(label => {
+                    label.classList.remove('bg-indigo-100', 'ring-2', 'ring-indigo-500');
+                });
+                // Добавляем стили только для выбранного label
+                const currentLabel = ul.querySelector(`label[for="${this.id}"]`);
+                if (currentLabel) {
+                    currentLabel.classList.add('bg-indigo-100', 'ring-2', 'ring-indigo-500');
                 }
-            } catch (error) {
-                console.error("Ошибка загрузки прогресса:", error);
-            }
-        }
-
-        /**
-         * Имитация действия администратора: удаление прогресса.
-         * Выполняет требование: "исчезает на сервере, когда админ отправил ответ"
-         */
-        async function deleteProgress() {
-            if (!isAuthReady || !db || !userId) return;
-
-            try {
-                const docRef = getSubmissionDocRef();
-                await deleteDoc(docRef);
-                
-                // Сброс локального состояния
-                mockQuestions.forEach(q => q.userAnswer = null);
-                submissionId = 'user_submission_' + Date.now(); // Новый ID для новой попытки
-                
-                showStatus('Имитация: Прогресс был удален администратором. Начните тест заново.', 'bg-yellow-100 text-yellow-800');
-                saveStatusDisplay.textContent = 'Ожидание действия...';
-                renderTest(); // Перерисовываем тест
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Отправить ответы и сохранить прогресс';
-                adminDeleteBtn.disabled = true; // Сбрасываем кнопку удаления
-            } catch (error) {
-                 console.error("Ошибка удаления прогресса:", error);
-                 showStatus('Ошибка удаления прогресса. См. консоль.', 'bg-red-100 text-red-800');
-            }
-        }
-
-        // --- Логика Интерфейса и Рендеринга ---
-
-        function showStatus(message, className) {
-            statusMessage.className = `p-4 rounded-lg text-sm font-medium ${className}`;
-            statusMessage.textContent = message;
-            statusMessage.classList.remove('hidden');
-        }
-
-        /**
-         * Обновляет ответ пользователя локально.
-         */
-        function handleOptionChange(questionId, answer) {
-            const question = mockQuestions.find(q => q.id === questionId);
-            if (question) {
-                question.userAnswer = answer;
-                // Автоматическое сохранение прогресса при каждом изменении (имитация "обновления страницы")
-                saveProgress(false); 
-            }
-        }
-
-        /**
-         * Рендерит вопросы теста на основе mockQuestions.
-         */
-        function renderTest() {
-            testContainer.innerHTML = '';
-            
-            const isSubmitted = mockQuestions.every(q => q.userAnswer !== null && submitBtn.disabled);
-
-            mockQuestions.forEach(q => {
-                const questionElement = document.createElement('div');
-                questionElement.className = 'p-6 bg-gray-50 rounded-xl shadow-lg border border-gray-200 space-y-4';
-                questionElement.innerHTML = `
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">${q.id}. ${q.question}</h2>
-                    <!-- Картинка приходит из тестов (Пункт 1) -->
-                    <img src="${q.imageUrl}" alt="Изображение для вопроса ${q.id}" class="w-full h-auto object-cover rounded-lg shadow-inner border border-gray-300" onerror="this.onerror=null;this.src='https://placehold.co/400x200/cccccc/000000?text=Ошибка+Загрузки+Изображения';">
-                    
-                    <div class="options-group space-y-3" data-question-id="${q.id}">
-                        ${q.options.map(option => {
-                            const isCorrect = isSubmitted && option === q.correctAnswer;
-                            const isSelected = q.userAnswer === option;
-                            
-                            let classes = 'p-3 rounded-lg border-2 transition duration-150 ease-in-out cursor-pointer hover:shadow-md';
-                            
-                            if (isSubmitted) {
-                                // Если тест отправлен, показываем правильный/неправильный ответ
-                                if (isCorrect) {
-                                    classes += ' bg-green-100 border-green-500 font-semibold correct-answer-visible';
-                                } else if (isSelected) {
-                                    classes += ' bg-red-100 border-red-500';
-                                } else {
-                                    classes += ' border-gray-300 text-gray-700';
-                                }
-                            } else {
-                                // Во время прохождения теста
-                                classes += isSelected ? ' bg-indigo-100 border-indigo-500 font-semibold' : ' border-gray-300 hover:bg-gray-100';
-                            }
-                            
-                            // Пункт 4: Изменение курсора на правильном ответе (только после отправки)
-                            // Класс correct-answer-visible делает это через CSS при наведении
-                            const cursorClass = isCorrect ? 'correct-answer-visible' : '';
-
-                            return `
-                                <div 
-                                    class="${classes} ${cursorClass}" 
-                                    data-answer="${option}"
-                                    data-question-id="${q.id}"
-                                    onclick="window.handleOptionClick(${q.id}, '${option.replace(/'/g, "\\'")}')"
-                                    ${isSubmitted ? 'style="pointer-events: none;"' : ''}
-                                >
-                                    ${option}
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
-                testContainer.appendChild(questionElement);
             });
-
-            // Если тест отправлен, активируем кнопку имитации удаления
-            if (isSubmitted) {
-                adminDeleteBtn.disabled = false;
-            }
-        }
-
-        // --- Обработчики Событий ---
-
-        // Переносим функцию в глобальную область видимости для обработки событий DOM
-        window.handleOptionClick = (questionId, answer) => {
-            const questionDiv = document.querySelector(`.options-group[data-question-id="${questionId}"]`);
-            if (questionDiv.getAttribute('style') && questionDiv.getAttribute('style').includes('none')) {
-                return; // Блокируем клики после отправки
-            }
-
-            handleOptionChange(questionId, answer);
-            renderTest(); // Перерисовать, чтобы показать выбранный ответ
-        };
-        
-        // Финализация теста (отправка на сервер)
-        function finalizeTest() {
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Ответы отправлены (Тест завершен)';
-            // Убеждаемся, что прогресс сохранен как 'отправленный'
-            saveProgress(true); 
-            // Активируем кнопку имитации администратора
-            adminDeleteBtn.disabled = false;
-
-            // Блокируем дальнейший ввод и показываем результаты
-            mockQuestions.forEach(q => q.userAnswer = q.userAnswer || 'Не отвечено');
-            renderTest();
-        }
-
-        submitBtn.addEventListener('click', finalizeTest);
-        adminDeleteBtn.addEventListener('click', deleteProgress);
-
-
-        // Инициализация
-        initFirebase();
+        });
     </script>
 </body>
 </html>
