@@ -3,552 +3,422 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Скриншот Панель</title>
+    <title>Админ-панель Тест-Хелпера</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        /* Настройка шрифта Inter и базовые стили */
         body {
-            font-family: Arial, sans-serif;
-            background: #1e1e1e;
-            color: white;
-            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+        .chat-scroll {
+            height: calc(100vh - 150px);
+            overflow-y: auto;
         }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #2d2d2d;
-            border-radius: 10px;
-        }
-
-        .header h1 {
-            color: #4CAF50;
-            margin-bottom: 10px;
-        }
-
-        .status {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .status-item {
-            background: #3d3d3d;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-
-        .status-item span {
-            color: #4CAF50;
-            font-weight: bold;
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            background: #4CAF50;
-            color: white;
-            transition: background 0.3s;
-        }
-
-        .btn:hover {
-            background: #45a049;
-        }
-
-        .btn-red {
-            background: #f44336;
-        }
-
-        .btn-red:hover {
-            background: #d32f2f;
-        }
-
-        .btn-blue {
-            background: #2196F3;
-        }
-
-        .btn-blue:hover {
-            background: #1976D2;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        input[type="text"] {
-            padding: 10px;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background: #2d2d2d;
-            color: white;
-            width: 200px;
-        }
-
-        .screenshots-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .screenshot-card {
-            background: #2d2d2d;
-            border-radius: 10px;
-            overflow: hidden;
-            transition: transform 0.3s;
-        }
-
-        .screenshot-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .screenshot-header {
-            padding: 15px;
-            background: #3d3d3d;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .screenshot-info {
-            font-size: 12px;
-            color: #aaa;
-        }
-
-        .screenshot-image {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            background: #1e1e1e;
-        }
-
-        .screenshot-actions {
-            padding: 15px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .answer-input {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background: #1e1e1e;
-            color: white;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 50px;
-            color: #777;
-            font-size: 18px;
-            grid-column: 1 / -1;
-        }
-
-        .connection-badge {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-size: 12px;
-            color: #aaa;
-            border: 1px solid #4CAF50;
-        }
-
-        .room-badge {
-            background: #4CAF50;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 12px;
+        .test-list-scroll {
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📸 Скриншот Панель</h1>
-            <p>Комната 1 | Простой обмен скриншотами</p>
+<body class="p-4 sm:p-6 bg-gray-100 min-h-screen">
+
+    <div id="app" class="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
+        
+        <!-- Колонка с комнатами/статусом (Sidebar) -->
+        <div class="lg:w-1/3 w-full bg-white p-4 rounded-xl shadow-lg h-full">
+            <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
+                Активные комнаты (Тесты)
+            </h2>
             
-            <div class="status">
-                <div class="status-item">
-                    Пользователей: <span id="users-count">0</span>
-                </div>
-                <div class="status-item">
-                    Скриншотов: <span id="screenshots-count">0</span>
-                </div>
-                <div class="status-item">
-                    Статус: <span id="connection-status">Подключение...</span>
-                </div>
+            <!-- Статус WebSocket -->
+            <div id="ws-status" class="mb-4 p-2 text-sm rounded-lg font-medium transition duration-300">
+                Подключение...
+            </div>
+
+            <!-- Список комнат -->
+            <div id="room-list" class="space-y-3 test-list-scroll">
+                <p class="text-gray-500 text-sm">Ожидание данных с сервера...</p>
             </div>
         </div>
 
-        <div class="controls">
-            <button class="btn" onclick="takeScreenshot()">
-                📸 Сделать скриншот
-            </button>
-            
-            <div class="input-group">
-                <input type="text" id="answer-text" placeholder="Быстрый ответ...">
-                <button class="btn btn-blue" onclick="quickAnswer()">
-                    📤 Отправить всем
-                </button>
-            </div>
-            
-            <button class="btn btn-red" onclick="clearAll()">
-                🗑️ Очистить все
-            </button>
-        </div>
+        <!-- Колонка с текущим тестом (Main Content) -->
+        <div class="lg:w-2/3 w-full bg-white p-6 rounded-xl shadow-lg">
+            <div id="test-view">
+                <h2 id="current-test-title" class="text-2xl font-extrabold mb-2 text-indigo-700">
+                    Выберите комнату для начала работы
+                </h2>
+                <p id="current-test-url" class="text-sm text-gray-500 mb-6 truncate">
+                    URL: (Не выбрано)
+                </p>
 
-        <div class="screenshots-grid" id="screenshots-container">
-            <div class="empty-state" id="empty-state">
-                <div style="font-size: 48px; margin-bottom: 20px;">📭</div>
-                <div>Скриншотов пока нет</div>
-                <div style="font-size: 14px; margin-top: 10px;">
-                    Нажмите "Сделать скриншот" чтобы начать
+                <!-- Контейнер вопросов -->
+                <div id="questions-container" class="space-y-8 chat-scroll p-2">
+                    <div class="flex items-center justify-center h-full text-gray-400 text-lg py-20">
+                        Тест будет загружен здесь после выбора комнаты.
+                    </div>
+                </div>
+
+                <!-- Кнопка сохранения/отправки (внизу) -->
+                <div class="mt-6 pt-4 border-t sticky bottom-0 bg-white">
+                    <button id="submit-answers-btn" disabled class="w-full bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-600 transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        Отправить ответы клиенту
+                    </button>
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="connection-badge" id="connection-badge">
-        ID: <span id="admin-id">...</span>
     </div>
 
     <script>
+        // Глобальные переменные и настройки
+        const production = location.protocol === 'https:' ?
+            'wss://v1-ai.onrender.com' :
+            'ws://localhost:10000';
+        
         let socket = null;
-        let adminId = null;
-        let screenshots = new Map();
+        let adminId = `admin-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
         let isConnected = false;
 
-        // Генерация ID
-        function generateId() {
-            const savedId = localStorage.getItem('adminId');
-            if (savedId) return savedId;
-            
-            const newId = `admin-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-            localStorage.setItem('adminId', newId);
-            return newId;
+        // Состояние приложения
+        let state = {
+            activeRooms: {}, // { roomNumber: { helperId, title, url, questions, answers } }
+            selectedRoom: null, // Номер текущей комнаты
+            currentAnswers: new Map(), // Map<questionId, answerText> для текущего теста
+        };
+
+        // DOM элементы
+        const elements = {
+            status: document.getElementById('ws-status'),
+            roomList: document.getElementById('room-list'),
+            title: document.getElementById('current-test-title'),
+            url: document.getElementById('current-test-url'),
+            questionsContainer: document.getElementById('questions-container'),
+            submitBtn: document.getElementById('submit-answers-btn')
+        };
+
+        // --- WebSocket Логика ---
+
+        function updateWsStatus(status, color, message) {
+            elements.status.textContent = `${status}: ${message}`;
+            elements.status.className = `mb-4 p-2 text-sm rounded-lg font-medium transition duration-300 ${color}`;
         }
 
-        // Подключение к WebSocket
         function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            const host = window.location.host;
-            const wsUrl = protocol + host;
+            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
             
-            console.log('Подключаемся к:', wsUrl);
-            
-            socket = new WebSocket(wsUrl);
-            
+            updateWsStatus('Подключение', 'bg-yellow-100 text-yellow-800', 'Установка соединения...');
+            socket = new WebSocket(production);
+
             socket.onopen = () => {
-                console.log('✅ WebSocket подключен');
                 isConnected = true;
-                adminId = generateId();
+                updateWsStatus('Подключено', 'bg-green-100 text-green-800', 'Ожидание новых тестов...');
+                console.log(`[Admin] WebSocket connected. ID: ${adminId}`);
                 
+                // 1. Сообщаем серверу, что мы - админ
                 socket.send(JSON.stringify({
-                    type: 'admin_connect',
-                    adminId: adminId,
-                    room: '1'
+                    type: "admin_connect",
+                    adminId: adminId
                 }));
                 
-                updateStatus('✅ Подключено', 'success');
-                updateAdminId();
+                // 2. Запрашиваем текущее состояние всех комнат
+                socket.send(JSON.stringify({ type: "request_room_status" }));
             };
-            
+
             socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'new_test') {
-                        addScreenshot(data);
-                    } else if (data.type === 'answer_update') {
-                        updateAnswer(data.questionId, data.answer);
-                    } else if (data.type === 'all_tests') {
-                        loadAllScreenshots(data.tests);
-                    }
+                    handleIncomingMessage(data);
                 } catch (err) {
-                    console.error('Ошибка обработки:', err);
+                    console.error('[Admin] Message parsing error:', err);
                 }
             };
-            
+
             socket.onerror = (error) => {
-                console.error('❌ Ошибка WebSocket:', error);
-                updateStatus('❌ Ошибка', 'error');
                 isConnected = false;
+                updateWsStatus('Ошибка', 'bg-red-100 text-red-800', 'Ошибка соединения.');
+                console.error('[Admin] WebSocket error:', error);
             };
-            
+
             socket.onclose = () => {
-                console.log('🔌 WebSocket отключен');
                 isConnected = false;
-                updateStatus('🔄 Переподключение...', 'warning');
-                
-                setTimeout(connectWebSocket, 3000);
+                updateWsStatus('Отключено', 'bg-red-100 text-red-800', 'Переподключение через 5с...');
+                console.log('[Admin] WebSocket closed, reconnecting...');
+                setTimeout(connectWebSocket, 5000);
             };
         }
 
-        // Добавление скриншота
-        function addScreenshot(data) {
-            const screenshotId = data.questionId || `ss-${Date.now()}`;
-            
-            screenshots.set(screenshotId, {
-                id: screenshotId,
-                helperId: data.helperId,
-                room: data.room || '1',
-                url: data.url || 'unknown',
-                questions: data.questions || [],
-                timestamp: data.timestamp || Date.now(),
-                answers: new Map()
-            });
-            
-            renderScreenshots();
-            updateCounters();
-        }
+        // Обработка входящих сообщений
+        function handleIncomingMessage(data) {
+            console.log('[Admin] Received:', data.type, data);
 
-        // Загрузка всех скриншотов
-        function loadAllScreenshots(allTests) {
-            screenshots.clear();
-            
-            allTests.forEach(test => {
-                const screenshotId = test.testId || `ss-${Date.now()}`;
-                screenshots.set(screenshotId, {
-                    id: screenshotId,
-                    helperId: test.helperId,
-                    room: test.room || '1',
-                    url: test.url || 'unknown',
-                    questions: test.questions || [],
-                    timestamp: test.timestamp || Date.now(),
-                    answers: test.answers || new Map()
-                });
-            });
-            
-            renderScreenshots();
-            updateCounters();
-        }
-
-        // Обновление ответа
-        function updateAnswer(questionId, answer) {
-            for (const [id, ss] of screenshots.entries()) {
-                if (ss.questions.some(q => q.id === questionId)) {
-                    if (!ss.answers) ss.answers = new Map();
-                    ss.answers.set(questionId, answer);
-                    updateScreenshotCard(id);
+            switch (data.type) {
+                case 'room_status':
+                    // Обновление списка активных комнат
+                    state.activeRooms = data.rooms;
+                    renderRoomList();
                     break;
-                }
+                case 'new_test':
+                    // Получен новый тест для комнаты
+                    const roomNum = data.room;
+                    state.activeRooms[roomNum] = {
+                        room: roomNum,
+                        helperId: data.helperId,
+                        title: data.title,
+                        url: data.url,
+                        questions: data.questions,
+                        answers: data.answers || {}, // Актуальные ответы для этого теста
+                        timestamp: data.timestamp
+                    };
+                    renderRoomList();
+                    
+                    // Если это активная комната, обновляем ее
+                    if (state.selectedRoom === roomNum) {
+                        selectRoom(roomNum); // Перерисовываем с новыми вопросами
+                    }
+                    break;
+                case 'answer_update':
+                    // Ответ обновился (например, другим админом).
+                    const updatedRoom = state.activeRooms[data.room];
+                    if (updatedRoom) {
+                        updatedRoom.answers[data.questionId] = data.answer;
+                        if (state.selectedRoom === data.room) {
+                            state.currentAnswers.set(data.questionId, data.answer);
+                            renderQuestions(updatedRoom.questions);
+                        }
+                    }
+                    break;
+                case 'room_disconnected':
+                    // Клиент отключился
+                    delete state.activeRooms[data.room];
+                    renderRoomList();
+                    if (state.selectedRoom === data.room) {
+                        state.selectedRoom = null;
+                        renderTestView();
+                    }
+                    break;
             }
         }
 
-        // Отправка ответа
-        function sendAnswer(screenshotId, questionId, answer) {
-            if (!socket || !isConnected) {
-                alert('Нет соединения с сервером');
+        // --- UI Логика: Список комнат ---
+
+        function renderRoomList() {
+            elements.roomList.innerHTML = '';
+            const rooms = Object.values(state.activeRooms).sort((a, b) => b.timestamp - a.timestamp);
+
+            if (rooms.length === 0) {
+                elements.roomList.innerHTML = '<p class="text-gray-500 text-sm">Нет активных клиентов. Откройте клиентский скрипт, чтобы увидеть комнату.</p>';
                 return;
             }
-            
-            socket.send(JSON.stringify({
-                type: 'submit_answer',
-                adminId: adminId,
-                testId: screenshotId,
-                questionId: questionId,
-                answer: answer
-            }));
-        }
 
-        // Быстрый ответ для всех
-        function quickAnswer() {
-            const answer = document.getElementById('answer-text').value.trim();
-            if (!answer) return;
-            
-            screenshots.forEach((ss, ssId) => {
-                if (ss.questions && ss.questions.length > 0) {
-                    ss.questions.forEach(question => {
-                        sendAnswer(ssId, question.id, answer);
-                    });
-                }
-            });
-            
-            document.getElementById('answer-text').value = '';
-            alert(`Ответ "${answer}" отправлен на все вопросы`);
-        }
-
-        // Очистка всех скриншотов
-        function clearAll() {
-            if (confirm('Удалить все скриншоты?')) {
-                screenshots.clear();
-                renderScreenshots();
-                updateCounters();
-            }
-        }
-
-        // Рендеринг скриншотов
-        function renderScreenshots() {
-            const container = document.getElementById('screenshots-container');
-            const emptyState = document.getElementById('empty-state');
-            
-            if (screenshots.size === 0) {
-                emptyState.style.display = 'block';
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            
-            let html = '';
-            const sortedScreenshots = Array.from(screenshots.values())
-                .sort((a, b) => b.timestamp - a.timestamp);
-            
-            sortedScreenshots.forEach(ss => {
-                const date = new Date(ss.timestamp).toLocaleTimeString();
+            rooms.forEach(roomData => {
+                const isSelected = roomData.room === state.selectedRoom;
+                const lastUpdate = new Date(roomData.timestamp).toLocaleTimeString('ru-RU');
                 
-                html += `
-                    <div class="screenshot-card" id="ss-${ss.id}">
-                        <div class="screenshot-header">
-                            <div class="screenshot-info">
-                                <strong>${ss.helperId || 'Пользователь'}</strong>
-                                <div style="margin-top: 5px;">${date} | Вопросов: ${ss.questions?.length || 0}</div>
-                            </div>
-                            <span class="room-badge">Комната ${ss.room || '1'}</span>
-                        </div>
-                        
-                        ${renderQuestions(ss)}
+                const roomElement = document.createElement('div');
+                roomElement.className = `
+                    p-3 border rounded-lg cursor-pointer transition duration-150
+                    ${isSelected 
+                        ? 'bg-indigo-500 text-white shadow-md border-indigo-500 transform scale-[1.02]' 
+                        : 'bg-white hover:bg-gray-50 border-gray-200'
+                    }
+                `;
+                roomElement.innerHTML = `
+                    <p class="font-bold text-lg">Комната #${roomData.room}</p>
+                    <p class="text-sm ${isSelected ? 'text-indigo-200' : 'text-gray-600'} truncate">${roomData.title || 'Тест без названия'}</p>
+                    <p class="text-xs ${isSelected ? 'text-indigo-300' : 'text-gray-400'} mt-1">Последний тест: ${lastUpdate}</p>
+                `;
+                roomElement.onclick = () => selectRoom(roomData.room);
+                elements.roomList.appendChild(roomElement);
+            });
+        }
+        
+        // Выбор комнаты
+        function selectRoom(roomNumber) {
+            state.selectedRoom = roomNumber;
+            const roomData = state.activeRooms[roomNumber];
+            
+            if (roomData) {
+                // Обновляем текущие ответы
+                state.currentAnswers.clear();
+                Object.entries(roomData.answers).forEach(([qId, answerText]) => {
+                    state.currentAnswers.set(qId, answerText);
+                });
+                
+                renderTestView(roomData);
+            }
+            renderRoomList(); // Обновляем подсветку
+        }
+
+        // --- UI Логика: Текущий тест ---
+
+        function renderTestView(roomData = null) {
+            if (!roomData && !state.selectedRoom) {
+                elements.title.textContent = 'Выберите комнату для начала работы';
+                elements.url.textContent = 'URL: (Не выбрано)';
+                elements.questionsContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-400 text-lg py-20">
+                        Тест будет загружен здесь после выбора комнаты.
                     </div>
                 `;
-            });
+                elements.submitBtn.disabled = true;
+                return;
+            }
+
+            const currentRoom = roomData || state.activeRooms[state.selectedRoom];
+            if (!currentRoom) return;
+
+            elements.title.textContent = currentRoom.title || `Тест из Комнаты #${currentRoom.room}`;
+            elements.url.textContent = `URL: ${currentRoom.url}`;
+            elements.submitBtn.disabled = false;
             
-            container.innerHTML = html;
+            renderQuestions(currentRoom.questions);
         }
 
         // Рендеринг вопросов
-        function renderQuestions(ss) {
-            if (!ss.questions || ss.questions.length === 0) {
-                return '<div style="padding: 20px; text-align: center; color: #777;">Нет вопросов</div>';
-            }
+        function renderQuestions(questions) {
+            elements.questionsContainer.innerHTML = '';
             
-            let html = '';
-            
-            ss.questions.forEach((question, index) => {
-                const answer = ss.answers?.get(question.id) || '';
+            questions.forEach(q => {
+                const currentAnswer = state.currentAnswers.get(q.id) || '';
                 
-                html += `
-                    <div style="padding: 15px; border-bottom: 1px solid #3d3d3d;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <strong style="color: #4CAF50;">Вопрос ${index + 1}</strong>
-                            <small style="color: ${answer ? '#4CAF50' : '#f44336'}">
-                                ${answer ? '✓ Ответ дан' : '⏳ Ожидает'}
-                            </small>
-                        </div>
-                        <div style="font-size: 14px; color: #ccc; margin-bottom: 10px;">
-                            ${question.text || 'Без текста'}
-                        </div>
-                        <div class="screenshot-actions">
-                            <input type="text" 
-                                   class="answer-input" 
-                                   placeholder="Введите ответ..."
-                                   value="${answer}"
-                                   onchange="sendAnswer('${ss.id}', '${question.id}', this.value)">
-                        </div>
+                const questionElement = document.createElement('div');
+                questionElement.className = 'p-5 border border-gray-200 rounded-lg shadow-sm bg-white hover:shadow-md transition duration-200';
+                questionElement.setAttribute('data-question-id', q.id);
+                questionElement.innerHTML = `
+                    <h4 class="text-lg font-semibold mb-3 text-gray-700">
+                        ${q.number}. ${q.text}
+                    </h4>
+                    <p class="font-medium text-sm text-indigo-500 mb-2">
+                        Ваш ответ: <span id="answer-display-${q.id}" class="font-bold">${currentAnswer || 'Ожидание ответа...'}</span>
+                    </p>
+                    <div class="space-y-2 mb-4">
+                        ${q.options.map((opt, index) => {
+                            const optText = opt.text.trim().replace(/"/g, '&quot;');
+                            const isSelected = currentAnswer === optText;
+                            
+                            return `
+                                <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-all duration-150 ${isSelected ? 'bg-green-50 border-green-400 ring-2 ring-green-500' : 'bg-gray-50 hover:bg-gray-100'}">
+                                    <input 
+                                        type="radio" 
+                                        name="q-${q.id}" 
+                                        value="${optText}"
+                                        class="mt-1 mr-3 w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                        ${isSelected ? 'checked' : ''}
+                                        onchange="handleAnswerChange('${q.id}', this.value)"
+                                    >
+                                    <span class="text-gray-800 text-sm font-medium leading-relaxed">${optText}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <!-- Альтернативный ввод (если не подходит мультивыбор) -->
+                    <div class="mt-4">
+                        <label for="input-${q.id}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Ввести ответ вручную:
+                        </label>
+                        <input 
+                            type="text" 
+                            id="input-${q.id}" 
+                            value="${currentAnswer}" 
+                            class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2"
+                            onblur="handleManualAnswerChange('${q.id}', this.value)"
+                        >
                     </div>
                 `;
+                elements.questionsContainer.appendChild(questionElement);
             });
-            
-            return html;
         }
-
-        // Обновление карточки скриншота
-        function updateScreenshotCard(ssId) {
-            const ss = screenshots.get(ssId);
-            if (!ss) return;
-            
-            const card = document.getElementById(`ss-${ssId}`);
-            if (card) {
-                const questionsHtml = renderQuestions(ss);
-                card.innerHTML = `
-                    <div class="screenshot-header">
-                        <div class="screenshot-info">
-                            <strong>${ss.helperId || 'Пользователь'}</strong>
-                            <div style="margin-top: 5px;">
-                                ${new Date(ss.timestamp).toLocaleTimeString()} | 
-                                Вопросов: ${ss.questions?.length || 0}
-                            </div>
-                        </div>
-                        <span class="room-badge">Комната ${ss.room || '1'}</span>
-                    </div>
-                    ${questionsHtml}
-                `;
+        
+        // Обработчик выбора ответа (Radio)
+        window.handleAnswerChange = function(questionId, answerText) {
+            const oldAnswer = state.currentAnswers.get(questionId);
+            if (oldAnswer !== answerText) {
+                state.currentAnswers.set(questionId, answerText);
+                document.getElementById(`answer-display-${questionId}`).textContent = answerText;
+                // Обновляем и ручной ввод
+                document.getElementById(`input-${questionId}`).value = answerText;
             }
         }
+        
+        // Обработчик ручного ввода
+        window.handleManualAnswerChange = function(questionId, answerText) {
+            const trimmedAnswer = answerText.trim();
+            const oldAnswer = state.currentAnswers.get(questionId);
+            
+            if (oldAnswer !== trimmedAnswer) {
+                state.currentAnswers.set(questionId, trimmedAnswer);
+                document.getElementById(`answer-display-${questionId}`).textContent = trimmedAnswer || 'Ожидание ответа...';
 
-        // Обновление статуса
-        function updateStatus(text, type = 'info') {
-            const statusElement = document.getElementById('connection-status');
-            if (statusElement) {
-                statusElement.textContent = text;
-                statusElement.style.color = 
-                    type === 'success' ? '#4CAF50' :
-                    type === 'error' ? '#f44336' : '#FF9800';
+                // Снимаем выбор с Radio
+                const radioInputs = document.querySelectorAll(`input[name="q-${questionId}"]`);
+                radioInputs.forEach(input => {
+                    if (input.value === trimmedAnswer) {
+                        input.checked = true;
+                        input.closest('label').classList.add('bg-green-50', 'border-green-400', 'ring-2', 'ring-green-500');
+                    } else {
+                        input.checked = false;
+                        input.closest('label').classList.remove('bg-green-50', 'border-green-400', 'ring-2', 'ring-green-500');
+                    }
+                });
             }
         }
-
-        // Обновление ID админа
-        function updateAdminId() {
-            const adminIdElement = document.getElementById('admin-id');
-            if (adminIdElement && adminId) {
-                adminIdElement.textContent = adminId.substring(0, 8) + '...';
+        
+        // Отправка всех ответов
+        function submitAnswers() {
+            if (!isConnected || !state.selectedRoom) {
+                alert('Нет активного подключения или не выбрана комната.');
+                return;
             }
-        }
-
-        // Обновление счетчиков
-        function updateCounters() {
-            const users = new Set();
-            screenshots.forEach(ss => {
-                if (ss.helperId) users.add(ss.helperId);
-            });
             
-            document.getElementById('users-count').textContent = users.size;
-            document.getElementById('screenshots-count').textContent = screenshots.size;
-        }
-
-        // Инициализация
-        function init() {
-            connectWebSocket();
-            
-            // Автообновление каждые 5 секунд
-            setInterval(() => {
-                if (socket && isConnected) {
-                    socket.send(JSON.stringify({
-                        type: 'request_all_tests'
-                    }));
+            const answersPayload = {};
+            state.currentAnswers.forEach((answer, questionId) => {
+                if (answer && answer.trim() !== '') {
+                    answersPayload[questionId] = { answer: answer.trim() };
                 }
-            }, 5000);
+            });
+
+            if (Object.keys(answersPayload).length === 0) {
+                 alert('Пожалуйста, введите хотя бы один ответ.');
+                 return;
+            }
+            
+            // Сохраняем в локальное состояние (для отображения)
+            const roomData = state.activeRooms[state.selectedRoom];
+            if (roomData) {
+                roomData.answers = {};
+                Object.entries(answersPayload).forEach(([qId, data]) => {
+                    roomData.answers[qId] = data.answer;
+                });
+            }
+
+            // Отправляем на сервер
+            socket.send(JSON.stringify({
+                type: 'submit_answers',
+                adminId: adminId,
+                room: state.selectedRoom,
+                answers: answersPayload
+            }));
+
+            // Визуальный фидбек
+            elements.submitBtn.textContent = 'Ответы отправлены!';
+            elements.submitBtn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600');
+            elements.submitBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+
+            setTimeout(() => {
+                elements.submitBtn.textContent = 'Отправить ответы клиенту';
+                elements.submitBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600');
+                elements.submitBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+            }, 1500);
         }
 
-        // Запуск при загрузке
-        document.addEventListener('DOMContentLoaded', init);
+        // --- Инициализация ---
+
+        window.onload = function() {
+            connectWebSocket();
+            elements.submitBtn.addEventListener('click', submitAnswers);
+        };
     </script>
 </body>
 </html>
