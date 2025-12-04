@@ -1,6 +1,7 @@
 const express = require('express');
 const WebSocket = require('ws');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 10000;
@@ -8,27 +9,28 @@ const port = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Хранилище данных
-const admins = new Map(); // adminId -> WebSocket
-const helpers = new Map(); // helperId -> WebSocket
-const tests = new Map(); // testId -> { questions, answers, helperId, timestamp }
-const helperTests = new Map(); // helperId -> testId
-const testAnswers = new Map(); // testId -> Map(questionId -> { answer, adminId, timestamp })
+// Раздаем статические файлы из папки 'public'
+app.use(express.static('public'));
 
-// Функция генерации ID теста
+// Хранилище данных
+const admins = new Map();
+const helpers = new Map();
+const tests = new Map();
+const helperTests = new Map();
+const testAnswers = new Map();
+
 function generateTestId() {
     return `test_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 }
 
 const server = app.listen(port, () => {
     console.log(`✅ Сервер запущен на порту: ${port}`);
-    console.log(`🌐 WebSocket доступен на порту: ${port}`);
-    console.log(`🚪 Система комнат: 1, 2, 3...`);
+    console.log(`🌐 WebSocket доступен на ws://localhost:${port}`);
+    console.log(`📁 Статические файлы: http://localhost:${port}/admin.html`);
 });
 
 const wss = new WebSocket.Server({ server });
 
-// Обработка WebSocket соединений
 wss.on('connection', (ws) => {
     console.log('🔗 Новое соединение');
     
@@ -66,28 +68,21 @@ wss.on('connection', (ws) => {
                     break;
             }
         } catch (error) {
-            console.error('❌ Ошибка обработки сообщения:', error.message);
+            console.error('❌ Ошибка обработки:', error.message);
         }
     });
     
-    ws.on('close', () => {
-        handleDisconnect(ws);
-    });
-    
-    ws.on('error', (error) => {
-        console.error('🔥 WebSocket error:', error.message);
-    });
+    ws.on('close', () => handleDisconnect(ws));
 });
 
-// Обработчики сообщений
+// Функции обработчики (оставьте те же что были ранее)
 function handleHelperConnect(ws, data) {
     ws.helperId = data.helperId;
     ws.room = data.room || 'default';
     helpers.set(data.helperId, ws);
     
-    console.log(`📝 Помощник подключен: ${data.helperId}, комната: ${ws.room}`);
+    console.log(`📝 Помощник: ${data.helperId}, комната: ${ws.room}`);
     
-    // Отправляем существующие ответы
     const savedTestId = helperTests.get(data.helperId);
     if (savedTestId) {
         const answers = testAnswers.get(savedTestId);
@@ -107,7 +102,6 @@ function handleAdminConnect(ws, data) {
     
     console.log(`👑 Админ подключен: ${data.adminId}`);
     
-    // Отправляем все активные тесты
     sendAllTestsToAdmin(ws);
 }
 
@@ -124,21 +118,17 @@ function handleSendTest(ws, data) {
         timestamp: Date.now()
     };
     
-    // Проверяем, есть ли уже тест у этого помощника
     const existingTestId = helperTests.get(ws.helperId);
     if (existingTestId) {
-        // Обновляем существующий тест
         tests.set(existingTestId, { ...tests.get(existingTestId), ...testData });
         console.log(`📝 Тест обновлен: ${ws.helperId}`);
     } else {
-        // Создаем новый тест
         tests.set(newTestId, testData);
         helperTests.set(ws.helperId, newTestId);
         testAnswers.set(newTestId, new Map());
         console.log(`📚 Новый тест: ${ws.helperId}, вопросов: ${testData.questions.length}`);
     }
     
-    // Отправляем всем админам
     broadcastToAdmins({
         type: 'new_test',
         testId: existingTestId || newTestId,
@@ -161,7 +151,6 @@ function handleSubmitAnswer(ws, data) {
         
         console.log(`✅ Ответ на вопрос ${questionId} от админа ${ws.adminId}`);
         
-        // Отправляем ответ пользователю
         const test = tests.get(testId);
         if (test && test.helperId) {
             const helperWs = helpers.get(test.helperId);
@@ -175,7 +164,6 @@ function handleSubmitAnswer(ws, data) {
             }
         }
         
-        // Обновляем всех админов
         broadcastToAdmins({
             type: 'answer_update',
             testId,
@@ -218,7 +206,6 @@ function handleDisconnect(ws) {
     }
 }
 
-// Вспомогательные функции
 function sendAllTestsToAdmin(adminWs) {
     const allTests = Array.from(tests.entries()).map(([testId, test]) => ({
         testId,
@@ -245,7 +232,7 @@ function broadcastToAdmins(message, excludeAdminId = null) {
     });
 }
 
-// Очистка старых тестов (старше 24 часов)
+// Очистка старых тестов
 setInterval(() => {
     const now = Date.now();
     const day = 24 * 60 * 60 * 1000;
@@ -255,7 +242,6 @@ setInterval(() => {
             tests.delete(testId);
             testAnswers.delete(testId);
             
-            // Удаляем из helperTests
             for (const [helperId, tId] of helperTests.entries()) {
                 if (tId === testId) {
                     helperTests.delete(helperId);
@@ -268,7 +254,7 @@ setInterval(() => {
     }
 }, 3600000);
 
-// Keep-alive для соединений
+// Keep-alive
 setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -277,7 +263,7 @@ setInterval(() => {
     });
 }, 30000);
 
-// Простой статус эндпоинт
+// API эндпоинты
 app.get('/status', (req, res) => {
     res.json({
         status: 'active',
@@ -288,15 +274,40 @@ app.get('/status', (req, res) => {
     });
 });
 
-// Корневой эндпоинт для проверки
+// Основной маршрут
 app.get('/', (req, res) => {
-    res.json({
-        message: 'Test System Server',
-        endpoints: {
-            status: '/status',
-            websocket: `ws://localhost:${port}`
-        }
-    });
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Test System Server</title>
+            <style>
+                body { font-family: Arial; padding: 40px; text-align: center; }
+                .card { background: #f5f5f5; padding: 30px; border-radius: 10px; margin: 20px auto; max-width: 600px; }
+                .btn { display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>🚀 Тестовая система</h1>
+                <p>WebSocket сервер для синхронизации тестов</p>
+                
+                <div style="margin: 20px 0;">
+                    <a href="/admin.html" class="btn">📊 Админ панель</a>
+                    <a href="/status" class="btn">📈 Статус</a>
+                </div>
+                
+                <div style="text-align: left; margin-top: 20px; background: white; padding: 15px; border-radius: 5px;">
+                    <h3>Информация:</h3>
+                    <p><strong>WebSocket:</strong> ws://localhost:${port}</p>
+                    <p><strong>Пользователи:</strong> ${helpers.size}</p>
+                    <p><strong>Админы:</strong> ${admins.size}</p>
+                    <p><strong>Активных тестов:</strong> ${tests.size}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
-console.log('✅ WebSocket сервер запущен!');
+console.log('✅ Сервер запущен!');
