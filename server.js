@@ -3,55 +3,153 @@ const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-const sharp = require('sharp');
 const cors = require('cors');
+const cheerio = require('cheerio');
+const axios = require('axios');
 
 const app = express();
 const port = process.env.PORT || 10000;
-const secretKey = 'your-secret-key'; // Replace with a secure key in production
+const secretKey = 'your-secret-key';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/screenshots', express.static(path.join(__dirname, 'public/screenshots')));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const wss = new WebSocket.Server({ server: app.listen(port, () => {
-    console.log(`Сервер запущен на порту: ${port}`);
-    console.log(`WebSocket-сервер запущен на ws://localhost:${port}`);
-}) });
+const server = app.listen(port, () => {
+    console.log(`✅ Сервер запущен на порту: ${port}`);
+    console.log(`🌐 WebSocket доступен на ws://localhost:${port}`);
+    console.log(`🚪 Доступны комнаты: 1, 2, 3...`);
+});
 
-const screenshotDir = path.join(__dirname, 'public/screenshots');
-if (!fs.existsSync(screenshotDir)) {
-    fs.mkdirSync(screenshotDir, { recursive: true });
-    console.log('Сервер: Папка для скриншотов создана:', screenshotDir);
-}
+const wss = new WebSocket.Server({ server });
 
-const helperData = new Map(); // helperId -> [screenshots]
-const clients = new Map();    // clientId -> WebSocket
-const helpers = new Map();    // helperId -> WebSocket
-const admins = new Map();     // adminId -> WebSocket
+// Структуры данных для комнатной системы
+const rooms = new Map();        // roomId -> Room object
+const users = new Map();        // userId -> User object
+const userConnections = new Map(); // userId -> WebSocket
 
-function loadExistingScreenshots() {
-    fs.readdirSync(screenshotDir).forEach(file => {
-        const match = file.match(/^helper-([^-]+)-(\d+-\d+)\.png$/);
-        if (match) {
-            const helperId = `helper-${match[1]}`;
-            const questionId = `${helperId}-${match[2]}`;
-            if (!helperData.has(helperId)) {
-                helperData.set(helperId, []);
-            }
-            helperData.get(helperId).push({ questionId, imageUrl: `/screenshots/${file}`, clientId: null, answer: '' });
+class Room {
+    constructor(roomId) {
+        this.id = roomId;
+        this.users = new Set(); // userIds
+        this.testData = null;   // текущий тест в комнате
+        this.answers = new Map(); // questionId -> { userId, answer, timestamp, userName }
+        this.chat = [];         // история сообщений
+        this.createdAt = Date.now();
+        this.lastActivity = Date.now();
+        this.testLoadedBy = null; // кто загрузил тест
+        this.testLoadedAt = null;
+    }
+    
+    addUser(userId) {
+        this.users.add(userId);
+        this.lastActivity = Date.now();
+    }
+    
+    removeUser(userId) {
+        this.users.delete(userId);
+        this.lastActivity = Date.now();
+    }
+    
+    hasUser(userId) {
+        return this.users.has(userId);
+    }
+    
+    getUserCount() {
+        return this.users.size;
+    }
+    
+    updateTest(testData, loadedByUserId) {
+        this.testData = testData;
+        this.testLoadedBy = loadedByUserId;
+        this.testLoadedAt = Date.now();
+        this.answers.clear(); // очищаем старые ответы при новом тесте
+        this.lastActivity = Date.now();
+    }
+    
+    submitAnswer(questionId, answer, userId, userName) {
+        this.answers.set(questionId, {
+            userId,
+            userName,
+            answer,
+            timestamp: Date.now()
+        });
+        this.lastActivity = Date.now();
+    }
+    
+    getAnswer(questionId) {
+        return this.answers.get(questionId);
+    }
+    
+    getAllAnswers() {
+        return Array.from(this.answers.entries()).map(([questionId, data]) => ({
+            questionId,
+            ...data
+        }));
+    }
+    
+    addChatMessage(userId, userName, message) {
+        this.chat.push({
+            userId,
+            userName,
+            message,
+            timestamp: Date.now()
+        });
+        // Держим только последние 100 сообщений
+        if (this.chat.length > 100) {
+            this.chat = this.chat.slice(-100);
         }
-    });
-    console.log(`Сервер: Загружено ${helperData.size} помощников с ${Array.from(helperData.values()).reduce((sum, v) => sum + v.length, 0)} скриншотами`);
+        this.lastActivity = Date.now();
+    }
+    
+    getChatHistory(count = 50) {
+        return this.chat.slice(-count);
+    }
+    
+    getRoomInfo() {
+        return {
+            id: this.id,
+            userCount: this.getUserCount(),
+            hasTest: !!this.testData,
+            testLoadedBy: this.testLoadedBy,
+            testLoadedAt: this.testLoadedAt,
+            answerCount: this.answers.size,
+            createdAt: this.createdAt,
+            lastActivity: this.lastActivity
+        };
+    }
 }
 
-loadExistingScreenshots();
+class User {
+    constructor(userId, userName, ws, roomId = null) {
+        this.id = userId;
+        this.name = userName;
+        this.ws = ws;
+        this.roomId = roomId;
+        this.joinedAt = Date.now();
+        this.lastActive = Date.now();
+    }
+    
+    setRoom(roomId) {
+        this.roomId = roomId;
+        this.lastActive = Date.now();
+    }
+    
+    leaveRoom() {
+        this.roomId = null;
+        this.lastActive = Date.now();
+    }
+    
+    updateActivity() {
+        this.lastActive = Date.now();
+    }
+}
 
+// API для авторизации (оставляем для совместимости)
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
     const validCredentials = {
@@ -71,389 +169,633 @@ app.post('/api/admin/login', (req, res) => {
     }
 });
 
-wss.on('connection', (ws) => {
-    console.log('Сервер: Новый клиент подключился по WebSocket');
-    ws.isAlive = true;
-    ws.on('pong', () => {
-        ws.isAlive = true;
-        console.log(`Сервер: Получен pong от клиента, helperId: ${ws.helperId || 'unknown'}, clientId: ${ws.clientId || 'unknown'}, adminId: ${ws.adminId || 'unknown'}`);
-    });
-
-    ws.on('message', (message) => {
-        let data;
-        try {
-            data = JSON.parse(message);
-            console.log('Сервер: Получено сообщение по WS:', data);
-        } catch (err) {
-            console.error('Сервер: Ошибка разбора сообщения:', err);
-            return;
+// API для парсинга теста
+app.post('/api/parse-test', async (req, res) => {
+    try {
+        const { url, html } = req.body;
+        
+        let testData;
+        if (html) {
+            testData = parseTestFromHTML(html, url || 'current-page');
+        } else if (url) {
+            const response = await axios.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                timeout: 10000
+            });
+            testData = parseTestFromHTML(response.data, url);
+        } else {
+            return res.status(400).json({ error: 'Нужен URL или HTML контент' });
         }
-
-        if (data.type === 'frontend_connect' && data.role === 'frontend') {
-            ws.clientId = data.clientId || `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            clients.set(ws.clientId, ws);
-            console.log(`Сервер: Фронтенд-клиент идентифицирован, clientId: ${ws.clientId}, активных фронтенд-клиентов: ${clients.size}`);
-            const initialData = Array.from(helperData.entries()).map(([helperId, screenshots]) => ({
-                helperId,
-                hasAnswer: screenshots.every(s => s.answer && s.answer.trim() !== '')
-            }));
-            ws.send(JSON.stringify({ type: 'initial_data', data: initialData, clientId: ws.clientId }));
-        } else if (data.type === 'admin_connect' && data.role === 'admin') {
-            ws.adminId = `admin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            admins.set(ws.adminId, ws);
-            console.log(`Сервер: Админ подключился, adminId: ${ws.adminId}, активных админов: ${admins.size}`);
-            // Send all screenshots to the admin
-            const allScreenshots = Array.from(helperData.entries()).flatMap(([helperId, screenshots]) =>
-                screenshots.map(screenshot => ({
-                    helperId,
-                    questionId: screenshot.questionId,
-                    imageUrl: screenshot.imageUrl,
-                    clientId: screenshot.clientId,
-                    answer: screenshot.answer
-                }))
-            );
-            ws.send(JSON.stringify({
-                type: 'all_screenshots',
-                screenshots: allScreenshots,
-                adminId: ws.adminId
-            }));
-            console.log(`Сервер: Отправлены все скриншоты админу ${ws.adminId}`);
-        } else if (data.type === 'request_initial_data') {
-            const initialData = Array.from(helperData.entries()).map(([helperId, screenshots]) => ({
-                helperId,
-                hasAnswer: screenshots.every(s => s.answer && s.answer.trim() !== '')
-            }));
-            ws.send(JSON.stringify({ type: 'initial_data', data: initialData, clientId: data.clientId || 'anonymous' }));
-        } else if (data.type === 'helper_connect' && data.role === 'helper') {
-            ws.helperId = data.helperId;
-            helpers.set(data.helperId, ws);
-            if (!helperData.has(data.helperId)) {
-                helperData.set(data.helperId, []);
-            }
-            console.log(`Сервер: Подключился помощник с ID: ${data.helperId}, активных помощников: ${helpers.size}`);
-        } else if (data.type === 'screenshot') {
-            const uniqueTimeLabel = `save-screenshot-${data.helperId}-${Date.now()}`;
-            console.time(uniqueTimeLabel);
-            const timestamp = Date.now();
-            const filename = `${data.helperId}-${timestamp}-0.png`;
-            const screenshotPath = path.join(screenshotDir, filename);
-            const buffer = Buffer.from(data.dataUrl.split(',')[1], 'base64');
-            sharp(buffer)
-                .resize({ width: 1280 })
-                .png({ quality: 80 })
-                .toFile(screenshotPath)
-                .then(() => {
-                    console.log(`Сервер: Скриншот сохранен: ${screenshotPath}`);
-                    const imageUrl = `/screenshots/${filename}`;
-                    const questionId = `${data.helperId}-${timestamp}-0`;
-                    if (!helperData.has(data.helperId)) {
-                        helperData.set(data.helperId, []);
-                    }
-                    helperData.get(data.helperId).push({ questionId, imageUrl, clientId: data.clientId || null, answer: '' });
-                    // Notify frontends (except the sender) and admins
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            if (client.clientId && client.clientId !== data.clientId) {
-                                client.send(JSON.stringify({
-                                    type: 'screenshot_info',
-                                    questionId,
-                                    imageUrl,
-                                    helperId: data.helperId,
-                                    clientId: client.clientId
-                                }));
-                                console.log(`Сервер: Сообщение о скриншоте отправлено фронтенду ${client.clientId}`);
-                            } else if (client.adminId) {
-                                client.send(JSON.stringify({
-                                    type: 'new_screenshot',
-                                    questionId,
-                                    imageUrl,
-                                    helperId: data.helperId,
-                                    clientId: data.clientId,
-                                    adminId: client.adminId
-                                }));
-                                console.log(`Сервер: Сообщение о скриншоте отправлено админу ${client.adminId}`);
-                            }
-                        }
-                    });
-                    console.timeEnd(uniqueTimeLabel);
-                })
-                .catch(err => {
-                    console.error('Сервер: Ошибка сохранения скриншота:', err);
-                    console.timeEnd(uniqueTimeLabel);
-                });
-        } else if (data.type === 'submit_answer') {
-            const { questionId, answer, clientId, adminId } = data;
-            for (const [helperId, screenshots] of helperData.entries()) {
-                const screenshot = screenshots.find(s => s.questionId === questionId);
-                if (screenshot) {
-                    screenshot.answer = answer;
-                    const targetClientId = screenshot.clientId; // Client who sent the screenshot
-                    const hasAnswer = screenshots.every(s => s.answer && s.answer.trim() !== '');
-                    // Send answer to the specific client and helper
-                    const targetClient = clients.get(targetClientId);
-                    if (targetClient && targetClient.readyState === WebSocket.OPEN) {
-                        targetClient.send(JSON.stringify({
-                            type: 'answer',
-                            questionId,
-                            answer,
-                            clientId: targetClientId
-                        }));
-                        console.log(`Сервер: Ответ отправлен клиенту ${targetClientId} для questionId: ${questionId}`);
-                    }
-                    const helperClient = helpers.get(helperId);
-                    if (helperClient && helperClient.readyState === WebSocket.OPEN) {
-                        helperClient.send(JSON.stringify({
-                            type: 'answer',
-                            questionId,
-                            answer,
-                            clientId: targetClientId
-                        }));
-                        console.log(`Сервер: Ответ отправлен помощнику ${helperId} для questionId: ${questionId}`);
-                    }
-                    // Notify all frontends and admins about the updated helper status
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN && client.clientId) {
-                            client.send(JSON.stringify({
-                                type: 'update_helper_card',
-                                helperId,
-                                hasAnswer,
-                                clientId: client.clientId
-                            }));
-                        }
-                        if (client.readyState === WebSocket.OPEN && client.adminId) {
-                            client.send(JSON.stringify({
-                                type: 'update_screenshot',
-                                questionId,
-                                answer,
-                                helperId,
-                                clientId: targetClientId,
-                                adminId: client.adminId
-                            }));
-                        }
-                    });
-                    break;
-                }
-            }
-        } else if (data.type === 'delete_screenshot') {
-            const { questionId, clientId } = data;
-            for (const [helperId, screenshots] of helperData.entries()) {
-                const screenshotIndex = screenshots.findIndex(s => s.questionId === questionId);
-                if (screenshotIndex !== -1) {
-                    const screenshot = screenshots[screenshotIndex];
-                    screenshots.splice(screenshotIndex, 1);
-                    fs.unlink(path.join(screenshotDir, path.basename(screenshot.questionId)), (err) => {
-                        if (err) console.error(`Сервер: Ошибка удаления файла ${screenshot.questionId}:`, err);
-                        else console.log(`Сервер: Файл удален: ${screenshot.questionId}`);
-                    });
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            if (client.clientId === clientId) {
-                                client.send(JSON.stringify({
-                                    type: 'screenshot_deleted_specific',
-                                    questionId,
-                                    clientId
-                                }));
-                            }
-                            if (client.adminId) {
-                                client.send(JSON.stringify({
-                                    type: 'screenshot_deleted',
-                                    questionId,
-                                    helperId,
-                                    adminId: client.adminId
-                                }));
-                            }
-                        }
-                    });
-                    if (screenshots.length === 0) {
-                        helperData.delete(helperId);
-                        wss.clients.forEach(client => {
-                            if (client.readyState === WebSocket.OPEN && client.clientId) {
-                                client.send(JSON.stringify({
-                                    type: 'helper_deleted',
-                                    helperId,
-                                    clientId: client.clientId
-                                }));
-                            }
-                            if (client.readyState === WebSocket.OPEN && client.adminId) {
-                                client.send(JSON.stringify({
-                                    type: 'helper_deleted',
-                                    helperId,
-                                    adminId: client.adminId
-                                }));
-                            }
-                        });
-                    }
-                    break;
-                }
-            }
-        } else if (data.type === 'request_helper_screenshots') {
-            const helperInfo = helperData.get(data.helperId);
-            if (helperInfo) {
-                const frontendClient = clients.get(data.clientId) || ws;
-                if (frontendClient && frontendClient.readyState === WebSocket.OPEN) {
-                    frontendClient.send(JSON.stringify({
-                        type: 'screenshots_by_helperId',
-                        helperId: data.helperId,
-                        screenshots: helperInfo,
-                        clientId: data.clientId || 'anonymous'
-                    }));
-                }
-            }
-        } else if (data.type === 'request_all_screenshots' && data.role === 'admin') {
-            const allScreenshots = Array.from(helperData.entries()).flatMap(([helperId, screenshots]) =>
-                screenshots.map(screenshot => ({
-                    helperId,
-                    questionId: screenshot.questionId,
-                    imageUrl: screenshot.imageUrl,
-                    clientId: screenshot.clientId,
-                    answer: screenshot.answer
-                }))
-            );
-            ws.send(JSON.stringify({
-                type: 'all_screenshots',
-                screenshots: allScreenshots,
-                adminId: ws.adminId
-            }));
-            console.log(`Сервер: Отправлены все скриншоты админу ${ws.adminId}`);
-        }
-    });
-
-    ws.on('close', () => {
-        console.log('Сервер: Клиент отключился');
-        if (ws.clientId) {
-            const clientId = ws.clientId;
-            clients.delete(clientId);
-            console.log(`Сервер: Фронтенд-клиент удален, clientId: ${clientId}, активных фронтенд-клиентов: ${clients.size}`);
-            for (const [helperId, screenshots] of helperData.entries()) {
-                const initialLength = screenshots.length;
-                const helperClient = helpers.get(helperId);
-                let hasClientScreenshots = false;
-                screenshots.forEach((screenshot, index) => {
-                    if (screenshot.clientId === clientId) {
-                        const filePath = path.join(screenshotDir, path.basename(screenshot.questionId) + '.png');
-                        if (fs.existsSync(filePath)) {
-                            fs.unlink(filePath, (err) => {
-                                if (err) console.error(`Сервер: Ошибка удаления файла ${filePath}:`, err);
-                                else console.log(`Сервер: Файл удален при отключении: ${filePath}`);
-                            });
-                        } else {
-                            console.warn(`Сервер: Файл не найден для удаления: ${filePath}`);
-                        }
-                        screenshots.splice(index, 1);
-                        index--;
-                    } else {
-                        hasClientScreenshots = true;
-                    }
-                });
-                if (!hasClientScreenshots && helperClient) {
-                    helpers.delete(helperId);
-                    console.log(`Сервер: Помощник с ID: ${helperId} удалён, так как нет активных скриншотов`);
-                }
-                if (screenshots.length === 0) {
-                    helperData.delete(helperId);
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            if (client.clientId) {
-                                client.send(JSON.stringify({
-                                    type: 'helper_deleted',
-                                    helperId,
-                                    clientId: client.clientId
-                                }));
-                            }
-                            if (client.adminId) {
-                                client.send(JSON.stringify({
-                                    type: 'helper_deleted',
-                                    helperId,
-                                    adminId: client.adminId
-                                }));
-                            }
-                        }
-                    });
-                } else if (initialLength !== screenshots.length) {
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN && client.clientId) {
-                            client.send(JSON.stringify({
-                                type: 'update_helper_card',
-                                helperId,
-                                hasAnswer: screenshots.every(s => s.answer && s.answer.trim() !== ''),
-                                clientId: client.clientId
-                            }));
-                        }
-                    });
-                }
-            }
-        }
-        if (ws.helperId) {
-            const helperId = ws.helperId;
-            helpers.delete(helperId);
-            console.log(`Сервер: Помощник с ID: ${helperId} отключился`);
-            if (!Array.from(helpers.keys()).includes(helperId)) {
-                if (helperData.has(helperId)) {
-                    const screenshots = helperData.get(helperId);
-                    screenshots.forEach(screenshot => {
-                        const filePath = path.join(screenshotDir, path.basename(screenshot.questionId) + '.png');
-                        if (fs.existsSync(filePath)) {
-                            fs.unlink(filePath, (err) => {
-                                if (err) console.error(`Сервер: Ошибка удаления файла ${filePath}:`, err);
-                                else console.log(`Сервер: Файл удален при отключении помощника: ${filePath}`);
-                            });
-                        }
-                    });
-                    helperData.delete(helperId);
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            if (client.clientId) {
-                                client.send(JSON.stringify({
-                                    type: 'helper_deleted',
-                                    helperId,
-                                    clientId: client.clientId
-                                }));
-                            }
-                            if (client.adminId) {
-                                client.send(JSON.stringify({
-                                    type: 'helper_deleted',
-                                    helperId,
-                                    adminId: client.adminId
-                                }));
-                            }
-                        }
-                    });
-                }
-            }
-        }
-        if (ws.adminId) {
-            admins.delete(ws.adminId);
-            console.log(`Сервер: Админ с ID: ${ws.adminId} отключился, активных админов: ${admins.size}`);
-        }
-    });
+        
+        res.json({ success: true, testData });
+    } catch (error) {
+        console.error('❌ Ошибка парсинга теста:', error.message);
+        res.status(500).json({ error: error.message });
+    }
 });
 
+// Функция парсинга теста из HTML
+function parseTestFromHTML(html, baseUrl) {
+    const $ = cheerio.load(html);
+    const testData = {
+        url: baseUrl,
+        title: $('title').text() || 'Тест',
+        pageTitle: $('h1').text() || 'Тестовая страница',
+        questions: [],
+        parsedAt: new Date().toISOString()
+    };
+    
+    // Парсим вопросы (адаптируйте селекторы под ваш сайт)
+    $('.table-test, .test-item, .question').each((index, element) => {
+        const question = {
+            id: $(element).attr('id') || `q${index + 1}`,
+            number: index + 1,
+            text: '',
+            html: '',
+            imageUrl: '',
+            options: [],
+            type: 'single' // или multiple
+        };
+        
+        // Текст вопроса
+        question.text = $(element).find('.test-question').text().trim();
+        question.html = $(element).find('.test-question').html() || '';
+        
+        // Изображение вопроса
+        const img = $(element).find('.test-question img');
+        if (img.length) {
+            const src = img.attr('src');
+            question.imageUrl = src.startsWith('http') ? src : new URL(src, baseUrl).href;
+        }
+        
+        // Варианты ответов
+        $(element).find('.answers-test li, .option').each((optIndex, optEl) => {
+            const option = {
+                id: $(optEl).find('input').attr('id') || `q${index + 1}_opt${optIndex + 1}`,
+                letter: String.fromCharCode(97 + optIndex), // a, b, c, d
+                text: $(optEl).find('p').text().trim(),
+                html: $(optEl).find('p').html() || '',
+                imageUrl: '',
+                value: $(optEl).find('input').attr('value') || (optIndex + 1)
+            };
+            
+            // Изображение варианта
+            const optImg = $(optEl).find('img');
+            if (optImg.length) {
+                const optSrc = optImg.attr('src');
+                option.imageUrl = optSrc.startsWith('http') ? optSrc : new URL(optSrc, baseUrl).href;
+            }
+            
+            question.options.push(option);
+        });
+        
+        testData.questions.push(question);
+    });
+    
+    // Если не нашли по стандартным селекторам, пытаемся найти любые вопросы
+    if (testData.questions.length === 0) {
+        $('form, .test, .quiz').each((index, element) => {
+            const inputs = $(element).find('input[type="radio"], input[type="checkbox"]');
+            if (inputs.length > 0) {
+                // Собираем вопросы по группам
+                const questionGroups = {};
+                
+                inputs.each((i, input) => {
+                    const name = $(input).attr('name');
+                    if (!questionGroups[name]) {
+                        questionGroups[name] = {
+                            id: name || `q${index}`,
+                            number: Object.keys(questionGroups).length + 1,
+                            text: $(input).closest('label').text().trim() || `Вопрос ${Object.keys(questionGroups).length + 1}`,
+                            options: []
+                        };
+                    }
+                    
+                    const label = $(input).next('label').text() || $(input).closest('label').text();
+                    questionGroups[name].options.push({
+                        id: $(input).attr('id'),
+                        text: label.trim(),
+                        value: $(input).attr('value')
+                    });
+                });
+                
+                Object.values(questionGroups).forEach(q => {
+                    testData.questions.push(q);
+                });
+            }
+        });
+    }
+    
+    testData.totalQuestions = testData.questions.length;
+    return testData;
+}
+
+// Обработка WebSocket соединений
+wss.on('connection', (ws) => {
+    console.log('🔗 Новое соединение');
+    ws.isAlive = true;
+    ws.userId = null;
+    ws.roomId = null;
+    
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
+    
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            console.log('📨 Получено:', data.type);
+            
+            switch (data.type) {
+                case 'join_room':
+                    handleJoinRoom(ws, data);
+                    break;
+                    
+                case 'leave_room':
+                    handleLeaveRoom(ws);
+                    break;
+                    
+                case 'parse_test':
+                    await handleParseTest(ws, data);
+                    break;
+                    
+                case 'submit_answer':
+                    handleSubmitAnswer(ws, data);
+                    break;
+                    
+                case 'request_answers':
+                    handleRequestAnswers(ws, data);
+                    break;
+                    
+                case 'chat_message':
+                    handleChatMessage(ws, data);
+                    break;
+                    
+                case 'set_user_name':
+                    handleSetUserName(ws, data);
+                    break;
+                    
+                case 'request_room_info':
+                    handleRequestRoomInfo(ws, data);
+                    break;
+                    
+                case 'request_chat_history':
+                    handleRequestChatHistory(ws, data);
+                    break;
+            }
+        } catch (error) {
+            console.error('❌ Ошибка обработки сообщения:', error.message);
+            sendError(ws, error.message);
+        }
+    });
+    
+    ws.on('close', () => {
+        console.log('👋 Отключение');
+        handleLeaveRoom(ws);
+        if (ws.userId) {
+            users.delete(ws.userId);
+            userConnections.delete(ws.userId);
+        }
+    });
+    
+    ws.on('error', (error) => {
+        console.error('🔥 Ошибка WebSocket:', error.message);
+    });
+    
+    // Отправляем приветственное сообщение
+    ws.send(JSON.stringify({
+        type: 'welcome',
+        message: 'Добро пожаловать в систему комнат для тестов. Введите номер комнаты (1, 2, 3...) для присоединения.'
+    }));
+});
+
+// Обработчики сообщений
+function handleJoinRoom(ws, data) {
+    const { roomId, userName } = data;
+    
+    if (!roomId || roomId.trim() === '') {
+        sendError(ws, 'Номер комнаты не может быть пустым');
+        return;
+    }
+    
+    // Генерируем ID пользователя, если нет
+    if (!ws.userId) {
+        ws.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+    
+    // Выходим из предыдущей комнаты, если есть
+    if (ws.roomId) {
+        handleLeaveRoom(ws);
+    }
+    
+    // Создаем комнату, если не существует
+    if (!rooms.has(roomId)) {
+        rooms.set(roomId, new Room(roomId));
+        console.log(`🚀 Создана комната ${roomId}`);
+    }
+    
+    const room = rooms.get(roomId);
+    const userId = ws.userId;
+    const finalUserName = userName || `Участник_${userId.substr(0, 4)}`;
+    
+    // Создаем или обновляем пользователя
+    let user = users.get(userId);
+    if (!user) {
+        user = new User(userId, finalUserName, ws, roomId);
+        users.set(userId, user);
+        userConnections.set(userId, ws);
+    } else {
+        user.setRoom(roomId);
+        user.name = finalUserName;
+    }
+    
+    // Добавляем пользователя в комнату
+    room.addUser(userId);
+    ws.roomId = roomId;
+    
+    // Отправляем подтверждение пользователю
+    ws.send(JSON.stringify({
+        type: 'room_joined',
+        roomId,
+        userId,
+        userName: finalUserName,
+        userCount: room.getUserCount(),
+        roomInfo: room.getRoomInfo(),
+        testData: room.testData
+    }));
+    
+    // Уведомляем других участников комнаты
+    broadcastToRoom(roomId, {
+        type: 'user_joined',
+        userId,
+        userName: finalUserName,
+        userCount: room.getUserCount()
+    }, userId);
+    
+    console.log(`👥 ${finalUserName} присоединился к комнате ${roomId}`);
+}
+
+function handleLeaveRoom(ws) {
+    if (!ws.userId || !ws.roomId) return;
+    
+    const userId = ws.userId;
+    const roomId = ws.roomId;
+    const room = rooms.get(roomId);
+    
+    if (!room) return;
+    
+    const user = users.get(userId);
+    if (!user) return;
+    
+    room.removeUser(userId);
+    user.leaveRoom();
+    
+    // Если комната пустая, удаляем через некоторое время
+    if (room.getUserCount() === 0) {
+        setTimeout(() => {
+            if (rooms.has(roomId) && rooms.get(roomId).getUserCount() === 0) {
+                rooms.delete(roomId);
+                console.log(`🗑️ Удалена пустая комната ${roomId}`);
+            }
+        }, 300000); // 5 минут
+    }
+    
+    // Уведомляем других участников
+    broadcastToRoom(roomId, {
+        type: 'user_left',
+        userId,
+        userName: user.name,
+        userCount: room.getUserCount()
+    }, userId);
+    
+    console.log(`👋 ${user.name} покинул комнату ${roomId}`);
+    
+    ws.roomId = null;
+}
+
+async function handleParseTest(ws, data) {
+    const { roomId, url, htmlContent } = data;
+    
+    if (!ws.userId || !ws.roomId || ws.roomId !== roomId) {
+        sendError(ws, 'Вы не состоите в этой комнате');
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+        sendError(ws, 'Комната не найдена');
+        return;
+    }
+    
+    const user = users.get(ws.userId);
+    if (!user) {
+        sendError(ws, 'Пользователь не найден');
+        return;
+    }
+    
+    try {
+        let testData;
+        
+        if (htmlContent) {
+            // Используем предоставленный HTML
+            testData = parseTestFromHTML(htmlContent, url || 'current-page');
+        } else if (url) {
+            // Загружаем со страницы через API
+            const response = await axios.post('http://localhost:' + port + '/api/parse-test', {
+                url: url
+            });
+            
+            if (response.data.success) {
+                testData = response.data.testData;
+            } else {
+                throw new Error('Ошибка парсинга теста');
+            }
+        } else {
+            // Пытаемся распарсить текущую страницу из DOM
+            sendError(ws, 'Для загрузки теста нужен URL или HTML');
+            return;
+        }
+        
+        // Обновляем тест в комнате
+        room.updateTest(testData, user.id);
+        
+        // Рассылаем обновленный тест всем в комнате
+        broadcastToRoom(roomId, {
+            type: 'test_loaded',
+            testData: testData,
+            loadedBy: user.name,
+            loadedById: user.id,
+            timestamp: Date.now()
+        });
+        
+        console.log(`📚 Тест загружен в комнату ${roomId} пользователем ${user.name}`);
+        
+    } catch (error) {
+        console.error('❌ Ошибка парсинга теста:', error.message);
+        sendError(ws, `Ошибка загрузки теста: ${error.message}`);
+    }
+}
+
+function handleSubmitAnswer(ws, data) {
+    const { roomId, questionId, answer } = data;
+    
+    if (!ws.userId || !ws.roomId || ws.roomId !== roomId) {
+        sendError(ws, 'Вы не состоите в этой комнате');
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+        sendError(ws, 'Комната не найдена');
+        return;
+    }
+    
+    const user = users.get(ws.userId);
+    if (!user) {
+        sendError(ws, 'Пользователь не найден');
+        return;
+    }
+    
+    // Сохраняем ответ в комнате
+    room.submitAnswer(questionId, answer, user.id, user.name);
+    
+    // Рассылаем обновление всем в комнате
+    broadcastToRoom(roomId, {
+        type: 'answer_submitted',
+        questionId,
+        answer,
+        userId: user.id,
+        userName: user.name,
+        timestamp: Date.now()
+    }, user.id);
+    
+    console.log(`✅ Ответ на вопрос ${questionId} от ${user.name} в комнате ${roomId}`);
+}
+
+function handleRequestAnswers(ws, data) {
+    const { roomId } = data;
+    
+    if (!ws.userId || !ws.roomId || ws.roomId !== roomId) {
+        sendError(ws, 'Вы не состоите в этой комнате');
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+        sendError(ws, 'Комната не найдена');
+        return;
+    }
+    
+    // Отправляем все ответы из комнаты
+    ws.send(JSON.stringify({
+        type: 'room_answers',
+        roomId,
+        answers: room.getAllAnswers()
+    }));
+}
+
+function handleChatMessage(ws, data) {
+    const { roomId, message } = data;
+    
+    if (!ws.userId || !ws.roomId || ws.roomId !== roomId) {
+        sendError(ws, 'Вы не состоите в этой комнате');
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+        sendError(ws, 'Комната не найдена');
+        return;
+    }
+    
+    const user = users.get(ws.userId);
+    if (!user) {
+        sendError(ws, 'Пользователь не найден');
+        return;
+    }
+    
+    if (!message || message.trim() === '') {
+        sendError(ws, 'Сообщение не может быть пустым');
+        return;
+    }
+    
+    // Добавляем сообщение в историю чата
+    room.addChatMessage(user.id, user.name, message.trim());
+    
+    // Рассылаем сообщение всем в комнате
+    broadcastToRoom(roomId, {
+        type: 'chat_message',
+        userId: user.id,
+        userName: user.name,
+        message: message.trim(),
+        timestamp: Date.now()
+    }, user.id);
+    
+    console.log(`💬 Сообщение от ${user.name} в комнате ${roomId}: ${message}`);
+}
+
+function handleSetUserName(ws, data) {
+    const { userName } = data;
+    
+    if (!ws.userId) {
+        sendError(ws, 'Пользователь не идентифицирован');
+        return;
+    }
+    
+    if (!userName || userName.trim() === '') {
+        sendError(ws, 'Имя не может быть пустым');
+        return;
+    }
+    
+    const user = users.get(ws.userId);
+    if (!user) {
+        sendError(ws, 'Пользователь не найден');
+        return;
+    }
+    
+    const oldName = user.name;
+    user.name = userName.trim();
+    
+    // Если пользователь в комнате, уведомляем других
+    if (user.roomId) {
+        const room = rooms.get(user.roomId);
+        if (room) {
+            broadcastToRoom(user.roomId, {
+                type: 'user_name_changed',
+                userId: user.id,
+                oldName,
+                newName: user.name
+            }, user.id);
+        }
+    }
+    
+    ws.send(JSON.stringify({
+        type: 'user_name_updated',
+        userName: user.name
+    }));
+    
+    console.log(`📝 Пользователь ${user.id} сменил имя с "${oldName}" на "${user.name}"`);
+}
+
+function handleRequestRoomInfo(ws, data) {
+    const { roomId } = data;
+    
+    if (!ws.userId || !ws.roomId || ws.roomId !== roomId) {
+        sendError(ws, 'Вы не состоите в этой комнате');
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+        sendError(ws, 'Комната не найдена');
+        return;
+    }
+    
+    // Собираем информацию об участниках
+    const participants = Array.from(room.users).map(userId => {
+        const user = users.get(userId);
+        return user ? {
+            id: user.id,
+            name: user.name,
+            joinedAt: user.joinedAt
+        } : null;
+    }).filter(Boolean);
+    
+    ws.send(JSON.stringify({
+        type: 'room_info',
+        roomId,
+        info: room.getRoomInfo(),
+        participants,
+        chatHistory: room.getChatHistory(20)
+    }));
+}
+
+function handleRequestChatHistory(ws, data) {
+    const { roomId, count = 50 } = data;
+    
+    if (!ws.userId || !ws.roomId || ws.roomId !== roomId) {
+        sendError(ws, 'Вы не состоите в этой комнате');
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+        sendError(ws, 'Комната не найдена');
+        return;
+    }
+    
+    ws.send(JSON.stringify({
+        type: 'chat_history',
+        roomId,
+        messages: room.getChatHistory(count)
+    }));
+}
+
+// Вспомогательные функции
+function broadcastToRoom(roomId, message, excludeUserId = null) {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    
+    room.users.forEach(userId => {
+        if (excludeUserId && userId === excludeUserId) return;
+        
+        const user = users.get(userId);
+        if (user && user.ws && user.ws.readyState === WebSocket.OPEN) {
+            user.ws.send(JSON.stringify(message));
+        }
+    });
+}
+
+function sendError(ws, message) {
+    ws.send(JSON.stringify({
+        type: 'error',
+        message: message
+    }));
+}
+
+// Очистка неактивных соединений
 setInterval(() => {
     wss.clients.forEach(ws => {
         if (!ws.isAlive) return ws.terminate();
         ws.isAlive = false;
         ws.ping();
-        console.log('Сервер: Отправлен ping клиенту');
     });
+    
+    // Очистка неактивных комнат
+    const now = Date.now();
+    for (const [roomId, room] of rooms.entries()) {
+        if (room.getUserCount() === 0 && now - room.lastActivity > 3600000) { // 1 час
+            rooms.delete(roomId);
+            console.log(`🗑️ Удалена неактивная комната ${roomId}`);
+        }
+    }
 }, 30000);
 
+// API статуса
 app.get('/status', (req, res) => {
     res.json({
         timestamp: new Date().toISOString(),
         status: 'active',
-        helpersCount: helperData.size,
-        frontendsCount: clients.size,
-        adminsCount: admins.size,
-        screenshotsCount: Array.from(helperData.values()).reduce((sum, v) => sum + v.length, 0),
-        memoryUsage: process.memoryUsage()
+        rooms: Array.from(rooms.keys()),
+        roomsCount: rooms.size,
+        usersCount: users.size,
+        activeConnections: wss.clients.size
     });
 });
 
-app.get('/list-screenshots', (req, res) => {
-    fs.readdir(screenshotDir, (err, files) => {
-        if (err) return res.status(500).send('Ошибка чтения папки');
-        res.json(files);
-    });
+app.get('/rooms/:roomId', (req, res) => {
+    const roomId = req.params.roomId;
+    const room = rooms.get(roomId);
+    
+    if (!room) {
+        return res.status(404).json({ error: 'Комната не найдена' });
+    }
+    
+    res.json(room.getRoomInfo());
 });
 
-
+console.log('✅ Система комнат для тестов запущена!');
+console.log('📱 Подключитесь через WebSocket к ws://localhost:' + port);
+console.log('🚪 Для работы используйте комнаты: 1, 2, 3...');
