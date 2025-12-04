@@ -1,6 +1,6 @@
 (async () => {
     const WS_URL = location.protocol === 'https:' 
-        ? 'wss://young-z7wb.onrender.com' 
+        ? 'wss://v1-ai.onrender.com.com' 
         : 'ws://localhost:10000';
 
     const helperSessionId = `auto-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
