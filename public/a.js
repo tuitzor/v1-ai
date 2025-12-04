@@ -1,176 +1,117 @@
 (async () => {
-    const WS_URL = location.protocol === 'https:' 
-        ? 'wss://v1-ai.onrender.com.com' 
+    const SERVER_URL = location.protocol === 'https:' 
+        ? 'wss://v1-ai.onrender.com'  // ← ВСТАВЬ СВОЙ СЕРВЕР СЮДА
         : 'ws://localhost:10000';
 
-    const helperSessionId = `auto-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
-    let clientId = localStorage.getItem('clientId');
-    if (!clientId) {
-        clientId = `client-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
-        localStorage.setItem('clientId', clientId);
-    }
+    const socket = new WebSocket(SERVER_URL);
+    const studentId = `student_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
 
-    let socket = null;
-    let alreadySent = false; // чтобы не слать одни и те же тесты по 100 раз
+    let correctAnswers = {}; // { 1: "a", 2: "c", ... }
 
-    console.log("%cАвто-хелпер запущен", "color: lime; font-size: 16px; font-weight: bold;");
-    console.log("Session:", helperSessionId, "| Client:", clientId);
+    console.log("%cХЕЛПЕР ЗАПУЩЕН — ЖДИ ЗЕЛЁНЫЙ КУРСОР", "color: #00ff00; font-size: 16px; font-weight: bold");
 
-    // === Подключение к WebSocket ===
-    function connect() {
-        socket = new WebSocket(WS_URL);
+    socket.onopen = () => {
+        socket.send(JSON.stringify({ type: "student_connect", studentId, url: location.href }));
+        collectAndSendTest();
+    };
 
-        socket.onopen = () => {
-            console.log("%cWebSocket подключён", "color: cyan");
-            socket.send(JSON.stringify({
-                type: "helper_connect",
-                role: "auto_helper",
-                helperId: helperSessionId,
-                clientId,
-                url: location.href
-            }));
-        };
+    socket.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.type === "correct_answers" && data.studentId === studentId) {
+                correctAnswers = data.answers;
+                console.log("%cПРАВИЛЬНЫЕ ОТВЕТЫ ПОЛУЧЕНЫ!", "color: gold; font-size: 18px", correctAnswers);
+                enableCursorMagic();
+            }
+        } catch (err) {}
+    };
 
-        socket.onclose = socket.onerror = () => {
-            console.log("WebSocket разорван — переподключаемся через 3 сек");
-            setTimeout(connect, 3000);
-        };
-    }
-    connect();
+    function collectAndSendTest() {
+        const questions = [];
 
-    // === Основная функция сбора тестов ===
-    function collectTests() {
-        const tests = [];
+        document.querySelectorAll('.table-test.tab-pane').forEach(tab => {
+            const questionBlocks = tab.querySelectorAll('.test-question');
+            questionBlocks.forEach((qBlock, idx) => {
+                const qImg = qBlock.querySelector('img')?.src;
+                if (!qImg) return;
 
-        // Поддерживаем оба варианта: один таб или несколько
-        document.querySelectorAll('.table-test.tab-pane').forEach((tab, tabIndex) => {
-            const tabId = tab.id || `tab-${tabIndex + 1}`;
-
-            // Находим все вопросы в этом табе
-            tab.querySelectorAll('.test-question').forEach((qBlock, qIdx) => {
-                const questionImg = qBlock.querySelector('p > img')?.src || 
-                                   qBlock.querySelector('img')?.src;
-
-                if (!questionImg) return;
-
-                // Баллы (ищем в ближайшем контейнере)
-                const pointsEl = tab.querySelector('.label.label-info') || 
-                                qBlock.parentElement.querySelector('.label.label-info');
-                const points = pointsEl ? parseInt(pointsEl.textContent.replace(/\D/g, '')) || 1 : 1;
-
-                const answers = [];
-                const answerItems = tab.querySelectorAll('.answers-test.testing li');
-
-                answerItems.forEach(li => {
-                    const radio = li.querySelector('input[type="radio"]');
-                    const img = li.querySelector('img');
-                    const letter = li.querySelector('.test-variant')?.textContent.trim();
-
-                    if (radio && img?.src && letter) {
-                        answers.push({
-                            letter,
-                            value: radio.value,
-                            image: img.src
-                        });
+                const options = [];
+                tab.querySelectorAll('.answers-test.testing li').forEach(li => {
+                    const letterEl = li.querySelector('.test-variant');
+                    const imgEl = li.querySelector('img');
+                    if (letterEl && imgEl?.src) {
+                        const letter = letterEl.textContent.trim().toLowerCase();
+                        if ("abcd".includes(letter)) {
+                            options.push({ letter, image: imgEl.src });
+                        }
                     }
                 });
 
-                if (answers.length >= 3) {
-                    tests.push({
-                        tabId,
-                        questionNumber: tests.filter(t => t.tabId === tabId).length + 1,
-                        points,
-                        questionImage: questionImg,
-                        answers
+                if (options.length === 4) {
+                    questions.push({
+                        index: questions.length + 1,
+                        questionImage: qImg,
+                        options
                     });
                 }
             });
         });
 
-        return tests;
-    }
-
-    // === Отправка на сервер ===
-    function sendIfReady() {
-        if (alreadySent) return;
-
-        const tests = collectTests();
-
-        if (tests.length === 0) {
-            console.log("Тесты ещё не загрузились, ждём...");
-            return;
-        }
-
-        // Дополнительная проверка: если вопросов больше 5 — точно всё загрузилось
-        if (tests.length < 5) {
-            console.log(`Найдено только ${tests.length} вопросов, подождём ещё...`);
-            return;
-        }
-
-        const payload = {
-            type: "all_tests_auto",
-            helperId: helperSessionId,
-            clientId,
-            url: location.href,
-            title: document.title,
-            total: tests.length,
-            tests
-        };
-
-        if (socket?.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify(payload));
-            console.log(`%cУСПЕШНО ОТПРАВЛЕНО ${tests.length} ВОПРОСОВ!`, "color: gold; font-size: 18px; font-weight: bold;");
-            alreadySent = true; // больше не шлём с этой страницы
-        }
-    }
-
-    // === Автоматический запуск через несколько секунд + наблюдатель за изменениями ===
-    let attempts = 0;
-    const maxAttempts = 30; // максимум 30 × 2 сек = 1 минута ожидания
-
-    const timer = setInterval(() => {
-        attempts++;
-        sendIfReady();
-
-        if (alreadySent || attempts >= maxAttempts) {
-            clearInterval(timer);
-            if (!alreadySent) {
-                console.log("%cВремя вышло — тесты так и не появились", "color: red");
-            }
-        }
-    }, 2000);
-
-    // Дополнительно: если контент подгружается динамически (через AJAX)
-    const observer = new MutationObserver(() => {
-        if (!alreadySent) {
-            console.log("Обнаружены изменения на странице — проверяем тесты...");
-            sendIfReady();
-        }
-    });
-
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: false
-    });
-
-    // === Отключение бана (на всякий случай оставляем) ===
-    const disableBan = () => {
-        document.querySelectorAll('.js-banned-screen').forEach(el => el.remove());
-
-        const orig = window.Audio;
-        window.Audio = function(src) {
-            if (src?.includes('beep')) return { play: () => {} };
-            return new orig(src);
-        };
-
-        new MutationObserver(muts => {
-            muts.forEach(m => m.addedNodes.forEach(node => {
-                if (node.classList?.contains('js-banned-screen')) node.remove();
+        if (questions.length > 0) {
+            socket.send(JSON.stringify({
+                type: "send_test",
+                studentId,
+                url: location.href,
+                total: questions.length,
+                questions
             }));
-        }).observe(document.body, { childList: true, subtree: true });
-    };
-    disableBan();
+            console.log(`Отправлено ${questions.length} вопросов на сервер`);
+        }
+    }
 
-    console.log("%cХелпер работает в фоновом режиме. Ждёт появления тестов и отправит автоматически.", "color: lightgreen; font-style: italic;");
+    function enableCursorMagic() {
+        // Убираем старые стили
+        document.body.style.cursor = 'default';
+
+        document.querySelectorAll('.answers-test.testing li').forEach(li => {
+            li.onmouseenter = li.onmouseleave = null;
+
+            const letter = li.querySelector('.test-variant')?.textContent.trim().toLowerCase();
+            if (!letter) return;
+
+            // Находим номер вопроса
+            const questionDiv = li.closest('.tab-pane')?.querySelector('.test-question');
+            if (!questionDiv) return;
+            const allQuestions = Array.from(document.querySelectorAll('.test-question'));
+            const qIndex = allQuestions.indexOf(questionDiv) + 1;
+
+            const correct = correctAnswers[qIndex];
+
+            li.addEventListener('mouseenter', () => {
+                if (correct && letter === correct) {
+                    document.body.style.cursor = "url('https://i.ibb.co/9yK2m3C/cursor-green.png') 16 16, auto";
+                } else if (correct) {
+                    document.body.style.cursor = "not-allowed";
+                }
+            });
+
+            li.addEventListener('mouseleave', () => {
+                document.body.style.cursor = "default";
+            });
+        });
+    }
+
+    // Защита от бана
+    const css = `.js-banned-screen, .banned-screen { display: none !important; }`;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    const oldAudio = window.Audio;
+    window.Audio = function(src) {
+        if (src?.includes('beep')) return { play: () => {} };
+        return new oldAudio(src);
+    };
+
+    console.log("%cГотово! Как только админ пришлёт ответы — курсор сам подскажет", "color: cyan; font-size: 14px");
 })();
