@@ -6,22 +6,29 @@ const app = express();
 const port = process.env.PORT || 10000;
 
 app.use(cors());
-app.use(express.json());
-
-const server = app.listen(port, () => {
-    console.log(`✅ Сервер запущен на порту: ${port}`);
-    console.log(`🌐 WebSocket доступен на ws://localhost:${port}`);
-});
-
-const wss = new WebSocket.Server({ server });
+app.use(express.json({ limit: '50mb' }));
 
 // Хранилище данных
 const admins = new Map(); // adminId -> WebSocket
 const helpers = new Map(); // helperId -> WebSocket
-const tests = new Map(); // testId -> { questions, answers }
+const tests = new Map(); // testId -> { questions, answers, helperId, timestamp }
 const helperTests = new Map(); // helperId -> testId
-const testAnswers = new Map(); // testId -> Map(questionId -> { answer, adminId })
+const testAnswers = new Map(); // testId -> Map(questionId -> { answer, adminId, timestamp })
 
+// Функция генерации ID теста
+function generateTestId() {
+    return `test_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+}
+
+const server = app.listen(port, () => {
+    console.log(`✅ Сервер запущен на порту: ${port}`);
+    console.log(`🌐 WebSocket доступен на порту: ${port}`);
+    console.log(`🚪 Система комнат: 1, 2, 3...`);
+});
+
+const wss = new WebSocket.Server({ server });
+
+// Обработка WebSocket соединений
 wss.on('connection', (ws) => {
     console.log('🔗 Новое соединение');
     
@@ -31,152 +38,31 @@ wss.on('connection', (ws) => {
             
             switch (data.type) {
                 case 'helper_connect':
-                    // Помощник (пользователь на сайте с тестом)
-                    ws.helperId = data.helperId;
-                    helpers.set(data.helperId, ws);
-                    console.log(`📝 Помощник подключен: ${data.helperId}`);
-                    
-                    // Отправляем существующие ответы если есть
-                    const savedTestId = helperTests.get(data.helperId);
-                    if (savedTestId) {
-                        const answers = testAnswers.get(savedTestId);
-                        if (answers) {
-                            ws.send(JSON.stringify({
-                                type: 'test_answers',
-                                testId: savedTestId,
-                                answers: Array.from(answers.entries())
-                            }));
-                        }
-                    }
+                    handleHelperConnect(ws, data);
                     break;
                     
                 case 'admin_connect':
-                    // Админ (отвечает на вопросы)
-                    ws.adminId = data.adminId;
-                    admins.set(data.adminId, ws);
-                    console.log(`👑 Админ подключен: ${data.adminId}`);
-                    
-                    // Отправляем все активные тесты админу
-                    const allTests = Array.from(tests.entries()).map(([testId, test]) => ({
-                        testId,
-                        helperId: Array.from(helperTests.entries()).find(([hId, tId]) => tId === testId)?.[0],
-                        questions: test.questions,
-                        answers: testAnswers.get(testId) ? Array.from(testAnswers.get(testId).entries()) : []
-                    }));
-                    
-                    ws.send(JSON.stringify({
-                        type: 'all_tests',
-                        tests: allTests
-                    }));
+                    handleAdminConnect(ws, data);
                     break;
                     
                 case 'send_test':
-                    // Помощник отправил тест
-                    if (!ws.helperId) break;
-                    
-                    const newTestId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-                    const testData = {
-                        helperId: ws.helperId,
-                        url: data.url || 'unknown',
-                        questions: data.questions,
-                        timestamp: Date.now()
-                    };
-                    
-                    tests.set(newTestId, testData);
-                    helperTests.set(ws.helperId, newTestId);
-                    testAnswers.set(newTestId, new Map());
-                    
-                    console.log(`📚 Тест получен от ${ws.helperId}: ${testData.questions.length} вопросов`);
-                    
-                    // Отправляем тест всем админам
-                    admins.forEach(adminWs => {
-                        if (adminWs.readyState === WebSocket.OPEN) {
-                            adminWs.send(JSON.stringify({
-                                type: 'new_test',
-                                testId: newTestId,
-                                ...testData
-                            }));
-                        }
-                    });
+                    handleSendTest(ws, data);
                     break;
                     
                 case 'submit_answer':
-                    // Админ отправил ответ
-                    if (!ws.adminId) break;
-                    
-                    const { testId: answerTestId, questionId, answer } = data;
-                    const answersMap = testAnswers.get(answerTestId);
-                    
-                    if (answersMap) {
-                        answersMap.set(questionId, {
-                            answer: answer,
-                            adminId: ws.adminId,
-                            timestamp: Date.now()
-                        });
-                        
-                        console.log(`✅ Ответ на вопрос ${questionId} от админа ${ws.adminId}`);
-                        
-                        // Отправляем ответ помощнику
-                        const test = tests.get(answerTestId);
-                        if (test && test.helperId) {
-                            const helperWs = helpers.get(test.helperId);
-                            if (helperWs && helperWs.readyState === WebSocket.OPEN) {
-                                helperWs.send(JSON.stringify({
-                                    type: 'answer_update',
-                                    questionId,
-                                    answer,
-                                    testId: answerTestId
-                                }));
-                            }
-                        }
-                        
-                        // Обновляем всех админов
-                        admins.forEach(adminWs => {
-                            if (adminWs.readyState === WebSocket.OPEN && adminWs !== ws) {
-                                adminWs.send(JSON.stringify({
-                                    type: 'answer_update',
-                                    testId: answerTestId,
-                                    questionId,
-                                    answer,
-                                    adminId: ws.adminId
-                                }));
-                            }
-                        });
-                    }
+                    handleSubmitAnswer(ws, data);
                     break;
                     
                 case 'request_answers':
-                    // Помощник запрашивает ответы
-                    if (!ws.helperId) break;
-                    
-                    const helperTestId = helperTests.get(ws.helperId);
-                    if (helperTestId) {
-                        const answers = testAnswers.get(helperTestId);
-                        if (answers) {
-                            ws.send(JSON.stringify({
-                                type: 'test_answers',
-                                testId: helperTestId,
-                                answers: Array.from(answers.entries())
-                            }));
-                        }
-                    }
+                    handleRequestAnswers(ws, data);
                     break;
                     
                 case 'request_all_tests':
-                    // Админ запрашивает все тесты
-                    if (!ws.adminId) break;
+                    handleRequestAllTests(ws, data);
+                    break;
                     
-                    const allTestsForAdmin = Array.from(tests.entries()).map(([testId, test]) => ({
-                        testId,
-                        helperId: Array.from(helperTests.entries()).find(([hId, tId]) => tId === testId)?.[0],
-                        questions: test.questions,
-                        answers: testAnswers.get(testId) ? Array.from(testAnswers.get(testId).entries()) : []
-                    }));
-                    
-                    ws.send(JSON.stringify({
-                        type: 'all_tests',
-                        tests: allTestsForAdmin
-                    }));
+                case 'ping':
+                    ws.send(JSON.stringify({ type: 'pong' }));
                     break;
             }
         } catch (error) {
@@ -185,16 +71,179 @@ wss.on('connection', (ws) => {
     });
     
     ws.on('close', () => {
-        if (ws.helperId) {
-            helpers.delete(ws.helperId);
-            console.log(`📝 Помощник отключен: ${ws.helperId}`);
-        }
-        if (ws.adminId) {
-            admins.delete(ws.adminId);
-            console.log(`👑 Админ отключен: ${ws.adminId}`);
-        }
+        handleDisconnect(ws);
+    });
+    
+    ws.on('error', (error) => {
+        console.error('🔥 WebSocket error:', error.message);
     });
 });
+
+// Обработчики сообщений
+function handleHelperConnect(ws, data) {
+    ws.helperId = data.helperId;
+    ws.room = data.room || 'default';
+    helpers.set(data.helperId, ws);
+    
+    console.log(`📝 Помощник подключен: ${data.helperId}, комната: ${ws.room}`);
+    
+    // Отправляем существующие ответы
+    const savedTestId = helperTests.get(data.helperId);
+    if (savedTestId) {
+        const answers = testAnswers.get(savedTestId);
+        if (answers) {
+            ws.send(JSON.stringify({
+                type: 'test_answers',
+                testId: savedTestId,
+                answers: Array.from(answers.entries())
+            }));
+        }
+    }
+}
+
+function handleAdminConnect(ws, data) {
+    ws.adminId = data.adminId;
+    admins.set(data.adminId, ws);
+    
+    console.log(`👑 Админ подключен: ${data.adminId}`);
+    
+    // Отправляем все активные тесты
+    sendAllTestsToAdmin(ws);
+}
+
+function handleSendTest(ws, data) {
+    if (!ws.helperId) return;
+    
+    const newTestId = generateTestId();
+    const testData = {
+        helperId: ws.helperId,
+        room: data.room || ws.room || 'default',
+        url: data.url || 'unknown',
+        questions: data.questions || [],
+        title: data.title || 'Тест',
+        timestamp: Date.now()
+    };
+    
+    // Проверяем, есть ли уже тест у этого помощника
+    const existingTestId = helperTests.get(ws.helperId);
+    if (existingTestId) {
+        // Обновляем существующий тест
+        tests.set(existingTestId, { ...tests.get(existingTestId), ...testData });
+        console.log(`📝 Тест обновлен: ${ws.helperId}`);
+    } else {
+        // Создаем новый тест
+        tests.set(newTestId, testData);
+        helperTests.set(ws.helperId, newTestId);
+        testAnswers.set(newTestId, new Map());
+        console.log(`📚 Новый тест: ${ws.helperId}, вопросов: ${testData.questions.length}`);
+    }
+    
+    // Отправляем всем админам
+    broadcastToAdmins({
+        type: 'new_test',
+        testId: existingTestId || newTestId,
+        ...testData
+    });
+}
+
+function handleSubmitAnswer(ws, data) {
+    if (!ws.adminId) return;
+    
+    const { testId, questionId, answer } = data;
+    const answersMap = testAnswers.get(testId);
+    
+    if (answersMap) {
+        answersMap.set(questionId, {
+            answer: answer,
+            adminId: ws.adminId,
+            timestamp: Date.now()
+        });
+        
+        console.log(`✅ Ответ на вопрос ${questionId} от админа ${ws.adminId}`);
+        
+        // Отправляем ответ пользователю
+        const test = tests.get(testId);
+        if (test && test.helperId) {
+            const helperWs = helpers.get(test.helperId);
+            if (helperWs && helperWs.readyState === WebSocket.OPEN) {
+                helperWs.send(JSON.stringify({
+                    type: 'answer_update',
+                    questionId,
+                    answer,
+                    testId
+                }));
+            }
+        }
+        
+        // Обновляем всех админов
+        broadcastToAdmins({
+            type: 'answer_update',
+            testId,
+            questionId,
+            answer,
+            adminId: ws.adminId
+        }, ws.adminId);
+    }
+}
+
+function handleRequestAnswers(ws, data) {
+    if (!ws.helperId) return;
+    
+    const testId = helperTests.get(ws.helperId);
+    if (testId) {
+        const answers = testAnswers.get(testId);
+        if (answers) {
+            ws.send(JSON.stringify({
+                type: 'test_answers',
+                testId,
+                answers: Array.from(answers.entries())
+            }));
+        }
+    }
+}
+
+function handleRequestAllTests(ws, data) {
+    if (!ws.adminId) return;
+    sendAllTestsToAdmin(ws);
+}
+
+function handleDisconnect(ws) {
+    if (ws.helperId) {
+        helpers.delete(ws.helperId);
+        console.log(`📝 Помощник отключен: ${ws.helperId}`);
+    }
+    if (ws.adminId) {
+        admins.delete(ws.adminId);
+        console.log(`👑 Админ отключен: ${ws.adminId}`);
+    }
+}
+
+// Вспомогательные функции
+function sendAllTestsToAdmin(adminWs) {
+    const allTests = Array.from(tests.entries()).map(([testId, test]) => ({
+        testId,
+        helperId: test.helperId,
+        room: test.room,
+        url: test.url,
+        title: test.title,
+        questions: test.questions,
+        answers: testAnswers.get(testId) ? Array.from(testAnswers.get(testId).entries()) : [],
+        timestamp: test.timestamp
+    }));
+    
+    adminWs.send(JSON.stringify({
+        type: 'all_tests',
+        tests: allTests
+    }));
+}
+
+function broadcastToAdmins(message, excludeAdminId = null) {
+    admins.forEach((adminWs, adminId) => {
+        if (adminWs.readyState === WebSocket.OPEN && adminId !== excludeAdminId) {
+            adminWs.send(JSON.stringify(message));
+        }
+    });
+}
 
 // Очистка старых тестов (старше 24 часов)
 setInterval(() => {
@@ -217,8 +266,18 @@ setInterval(() => {
             console.log(`🗑️ Удален старый тест: ${testId}`);
         }
     }
-}, 3600000); // Каждый час
+}, 3600000);
 
+// Keep-alive для соединений
+setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+        }
+    });
+}, 30000);
+
+// Простой статус эндпоинт
 app.get('/status', (req, res) => {
     res.json({
         status: 'active',
@@ -229,34 +288,15 @@ app.get('/status', (req, res) => {
     });
 });
 
+// Корневой эндпоинт для проверки
 app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Сервер тестов</title>
-            <style>
-                body { font-family: Arial, sans-serif; padding: 20px; }
-                .status { background: #f0f0f0; padding: 20px; border-radius: 10px; margin: 10px 0; }
-                .connected { color: green; }
-                .disconnected { color: red; }
-            </style>
-        </head>
-        <body>
-            <h1>Сервер системы тестов</h1>
-            <div class="status">
-                <h2>Статус: <span class="connected">✅ Активен</span></h2>
-                <p>WebSocket: ws://localhost:${port}</p>
-                <p>Админ панель: <a href="/admin">/admin</a></p>
-            </div>
-        </body>
-        </html>
-    `);
+    res.json({
+        message: 'Test System Server',
+        endpoints: {
+            status: '/status',
+            websocket: `ws://localhost:${port}`
+        }
+    });
 });
 
-app.get('/admin', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
-});
-
-console.log('✅ Фоновая система тестов запущена!');
-console.log(`🌐 Админ панель доступна по адресу: http://localhost:${port}/admin`);
+console.log('✅ WebSocket сервер запущен!');
