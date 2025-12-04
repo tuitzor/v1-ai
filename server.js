@@ -37,13 +37,13 @@ wss.on('connection', (ws) => {
                     console.log(`📝 Помощник подключен: ${data.helperId}`);
                     
                     // Отправляем существующие ответы если есть
-                    const testId = helperTests.get(data.helperId);
-                    if (testId) {
-                        const answers = testAnswers.get(testId);
+                    const savedTestId = helperTests.get(data.helperId);
+                    if (savedTestId) {
+                        const answers = testAnswers.get(savedTestId);
                         if (answers) {
                             ws.send(JSON.stringify({
                                 type: 'test_answers',
-                                testId: testId,
+                                testId: savedTestId,
                                 answers: Array.from(answers.entries())
                             }));
                         }
@@ -74,7 +74,7 @@ wss.on('connection', (ws) => {
                     // Помощник отправил тест
                     if (!ws.helperId) break;
                     
-                    const testId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+                    const newTestId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
                     const testData = {
                         helperId: ws.helperId,
                         url: data.url || 'unknown',
@@ -82,9 +82,9 @@ wss.on('connection', (ws) => {
                         timestamp: Date.now()
                     };
                     
-                    tests.set(testId, testData);
-                    helperTests.set(ws.helperId, testId);
-                    testAnswers.set(testId, new Map());
+                    tests.set(newTestId, testData);
+                    helperTests.set(ws.helperId, newTestId);
+                    testAnswers.set(newTestId, new Map());
                     
                     console.log(`📚 Тест получен от ${ws.helperId}: ${testData.questions.length} вопросов`);
                     
@@ -93,7 +93,7 @@ wss.on('connection', (ws) => {
                         if (adminWs.readyState === WebSocket.OPEN) {
                             adminWs.send(JSON.stringify({
                                 type: 'new_test',
-                                testId,
+                                testId: newTestId,
                                 ...testData
                             }));
                         }
@@ -161,6 +161,23 @@ wss.on('connection', (ws) => {
                         }
                     }
                     break;
+                    
+                case 'request_all_tests':
+                    // Админ запрашивает все тесты
+                    if (!ws.adminId) break;
+                    
+                    const allTestsForAdmin = Array.from(tests.entries()).map(([testId, test]) => ({
+                        testId,
+                        helperId: Array.from(helperTests.entries()).find(([hId, tId]) => tId === testId)?.[0],
+                        questions: test.questions,
+                        answers: testAnswers.get(testId) ? Array.from(testAnswers.get(testId).entries()) : []
+                    }));
+                    
+                    ws.send(JSON.stringify({
+                        type: 'all_tests',
+                        tests: allTestsForAdmin
+                    }));
+                    break;
             }
         } catch (error) {
             console.error('❌ Ошибка обработки сообщения:', error.message);
@@ -212,4 +229,34 @@ app.get('/status', (req, res) => {
     });
 });
 
+app.get('/', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Сервер тестов</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .status { background: #f0f0f0; padding: 20px; border-radius: 10px; margin: 10px 0; }
+                .connected { color: green; }
+                .disconnected { color: red; }
+            </style>
+        </head>
+        <body>
+            <h1>Сервер системы тестов</h1>
+            <div class="status">
+                <h2>Статус: <span class="connected">✅ Активен</span></h2>
+                <p>WebSocket: ws://localhost:${port}</p>
+                <p>Админ панель: <a href="/admin">/admin</a></p>
+            </div>
+        </body>
+        </html>
+    `);
+});
+
+app.get('/admin', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
+
 console.log('✅ Фоновая система тестов запущена!');
+console.log(`🌐 Админ панель доступна по адресу: http://localhost:${port}/admin`);
