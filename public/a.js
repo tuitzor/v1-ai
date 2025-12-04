@@ -2,7 +2,7 @@
     'use strict';
     
     const production = location.protocol === 'https:' ? 
-        'wss://young-z7wb.onrender.com' : 
+        'wss://v1-ai.onrender.com' : 
         'ws://localhost:10000';
     
     let socket = null;
