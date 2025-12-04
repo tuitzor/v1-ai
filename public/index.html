@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: #0a0e17;
             color: #fff;
             min-height: 100vh;
             overflow-x: hidden;
@@ -66,6 +66,11 @@
             animation: pulse 2s infinite;
         }
 
+        .status-dot.disconnected {
+            background: #f44336;
+            animation: none;
+        }
+
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -80,7 +85,7 @@
         }
 
         .room-card {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.03);
             border-radius: 12px;
             padding: 20px;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -124,23 +129,6 @@
             background: rgba(255, 255, 255, 0.1);
             padding: 3px 8px;
             border-radius: 10px;
-        }
-
-        .room-title {
-            font-size: 18px;
-            margin-bottom: 10px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .room-url {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 15px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .questions-list {
@@ -225,12 +213,7 @@
             padding: 50px 20px;
             color: #888;
             font-size: 18px;
-        }
-
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 20px;
-            opacity: 0.5;
+            grid-column: 1 / -1;
         }
 
         .connection-info {
@@ -277,6 +260,45 @@
                 margin-top: 20px;
             }
         }
+
+        /* Стили для уведомлений */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s ease;
+            max-width: 300px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .notification-success {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .notification-error {
+            background: #f44336;
+            color: white;
+        }
+
+        .notification-warning {
+            background: #FF9800;
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -286,15 +308,14 @@
                 <h1>📚 Админ-панель тестов</h1>
             </div>
             <div class="status-indicator">
-                <div class="status-dot"></div>
+                <div class="status-dot" id="status-dot"></div>
                 <span id="connection-status">Подключение...</span>
             </div>
         </div>
 
         <div class="rooms-grid" id="rooms-container">
-            <!-- Комнаты будут добавляться здесь -->
             <div class="empty-state" id="empty-state">
-                <div>📭</div>
+                <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">📭</div>
                 <div>Активных комнат пока нет</div>
                 <div style="font-size: 14px; margin-top: 10px;">Ожидание тестов от пользователей...</div>
             </div>
@@ -302,7 +323,8 @@
 
         <div class="connection-info" id="connection-info">
             ID: <span id="admin-id">подключение...</span> | 
-            Комнат: <span id="rooms-count">0</span>
+            Комнат: <span id="rooms-count">0</span> |
+            <button onclick="location.reload()" style="background: none; border: none; color: #4CAF50; cursor: pointer; margin-left: 10px;">🔄</button>
         </div>
     </div>
 
@@ -310,13 +332,16 @@
         (async () => {
             'use strict';
             
-            const production = location.protocol === 'https:' ? 
-                'wss://v1-ai.onrender.com' : 
-                'ws://localhost:10000';
+            // Используем правильный URL для WebSocket
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const host = window.location.hostname === 'localhost' ? 'localhost:10000' : 'v1-ai.onrender.com';
+            const production = protocol + host;
+            
+            console.log('🌐 Подключаемся к:', production);
             
             let socket = null;
             let adminId = null;
-            let rooms = new Map(); // roomId -> { roomData, tests }
+            let rooms = new Map();
             let isConnected = false;
             
             // Генерация ID админа
@@ -329,18 +354,49 @@
                 return newId;
             }
             
+            // Обновление статуса
+            function updateStatus(text, type = 'info') {
+                const statusElement = document.getElementById('connection-status');
+                const dotElement = document.getElementById('status-dot');
+                
+                if (statusElement) {
+                    statusElement.textContent = text;
+                }
+                
+                if (dotElement) {
+                    if (type === 'success') {
+                        dotElement.style.background = '#4CAF50';
+                        dotElement.classList.remove('disconnected');
+                    } else if (type === 'error') {
+                        dotElement.style.background = '#f44336';
+                        dotElement.classList.add('disconnected');
+                    } else if (type === 'warning') {
+                        dotElement.style.background = '#FF9800';
+                        dotElement.classList.remove('disconnected');
+                    }
+                }
+                
+                console.log(`📡 Статус: ${text}`);
+            }
+            
             // Подключение к WebSocket
             function connectWebSocket() {
-                if (socket && socket.readyState === WebSocket.OPEN) return;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    console.log('✅ WebSocket уже подключен');
+                    return;
+                }
                 
                 updateStatus('Подключение к серверу...', 'warning');
+                console.log('🔗 Начинаем подключение...');
                 
                 socket = new WebSocket(production);
                 
                 socket.onopen = () => {
+                    console.log('✅ WebSocket подключен успешно!');
                     isConnected = true;
                     adminId = generateAdminId();
                     
+                    // Отправляем информацию о подключении
                     socket.send(JSON.stringify({
                         type: 'admin_connect',
                         adminId: adminId
@@ -348,12 +404,17 @@
                     
                     updateStatus('Подключено ✅', 'success');
                     updateAdminId();
-                    console.log('✅ Админ подключен:', adminId);
+                    
+                    // Запрашиваем тесты сразу после подключения
+                    setTimeout(() => {
+                        requestAllTests();
+                    }, 1000);
                 };
                 
                 socket.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
+                        console.log('📨 Получено от сервера:', data.type, data);
                         
                         switch (data.type) {
                             case 'all_tests':
@@ -367,6 +428,10 @@
                             case 'answer_update':
                                 processAnswerUpdate(data);
                                 break;
+                                
+                            case 'pong':
+                                // Ответ на ping, ничего не делаем
+                                break;
                         }
                     } catch (err) {
                         console.error('❌ Ошибка обработки сообщения:', err);
@@ -376,19 +441,32 @@
                 socket.onerror = (error) => {
                     console.error('❌ Ошибка WebSocket:', error);
                     updateStatus('Ошибка соединения ❌', 'error');
+                    isConnected = false;
                 };
                 
                 socket.onclose = () => {
+                    console.log('🔌 WebSocket отключен');
                     isConnected = false;
                     updateStatus('Переподключение...', 'warning');
-                    console.log('🔌 WebSocket отключен, переподключение через 3 секунды...');
                     
+                    // Переподключаемся через 3 секунды
                     setTimeout(connectWebSocket, 3000);
                 };
             }
             
+            // Запрос всех тестов
+            function requestAllTests() {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'request_all_tests'
+                    }));
+                    console.log('📥 Запрошены все тесты');
+                }
+            }
+            
             // Обработка всех тестов
             function processAllTests(allTests) {
+                console.log('📊 Получено тестов:', allTests.length);
                 rooms.clear();
                 
                 allTests.forEach(test => {
@@ -397,20 +475,25 @@
                 
                 renderRooms();
                 updateRoomsCount();
+                
+                if (allTests.length > 0) {
+                    showNotification(`Загружено ${allTests.length} тестов`, 'success');
+                }
             }
             
             // Обработка нового теста
             function processNewTest(testData) {
+                console.log('🆕 Новый тест:', testData.testId);
                 addOrUpdateTest(testData);
                 renderRooms();
                 updateRoomsCount();
                 
-                // Показываем уведомление
-                showNotification(`Новый тест в комнате ${getRoomName(testData.helperId)}`);
+                showNotification(`Новый тест в комнате ${getRoomName(testData.helperId)}`, 'success');
             }
             
             // Обработка обновления ответа
             function processAnswerUpdate(data) {
+                console.log('✅ Обновление ответа:', data.questionId, data.answer);
                 const testId = data.testId;
                 
                 // Находим тест во всех комнатах
@@ -420,7 +503,6 @@
                         if (!test.answers) test.answers = new Map();
                         test.answers.set(data.questionId, data.answer);
                         
-                        // Обновляем конкретную комнату
                         updateRoomCard(roomId);
                         break;
                     }
@@ -429,10 +511,9 @@
             
             // Добавление или обновление теста
             function addOrUpdateTest(testData) {
-                // Извлекаем номер комнаты из helperId
-                // Формат: helper-roomX-XXXX или просто helper-XXXX
-                const roomMatch = testData.helperId.match(/room(\d+)/i);
-                const roomId = roomMatch ? roomMatch[1] : 'default';
+                // Извлекаем номер комнаты
+                const roomMatch = testData.helperId ? testData.helperId.match(/room(\d+)/i) : null;
+                const roomId = roomMatch ? roomMatch[1] : (testData.room || 'default');
                 
                 if (!rooms.has(roomId)) {
                     rooms.set(roomId, {
@@ -452,14 +533,13 @@
                     // Обновляем существующий тест
                     room.tests[existingTestIndex] = {
                         ...room.tests[existingTestIndex],
-                        ...testData,
-                        answers: room.tests[existingTestIndex].answers || new Map()
+                        ...testData
                     };
                 } else {
                     // Добавляем новый тест
                     room.tests.push({
                         ...testData,
-                        answers: new Map()
+                        answers: testData.answers || new Map()
                     });
                 }
                 
@@ -468,6 +548,7 @@
             
             // Получение имени комнаты
             function getRoomName(helperId) {
+                if (!helperId) return 'Без комнаты';
                 const roomMatch = helperId.match(/room(\d+)/i);
                 return roomMatch ? `Комната ${roomMatch[1]}` : 'Без комнаты';
             }
@@ -488,6 +569,7 @@
                 }));
                 
                 console.log(`📤 Ответ отправлен: ${questionId} -> "${answer}"`);
+                showNotification('Ответ отправлен', 'success');
             }
             
             // Рендеринг комнат
@@ -497,7 +579,6 @@
                 
                 if (rooms.size === 0) {
                     emptyState.style.display = 'block';
-                    container.innerHTML = '<div class="empty-state" id="empty-state"><div>📭</div><div>Активных комнат пока нет</div><div style="font-size: 14px; margin-top: 10px;">Ожидание тестов от пользователей...</div></div>';
                     return;
                 }
                 
@@ -564,7 +645,7 @@
                         html += `
                             <div class="question-item">
                                 <div class="question-header">
-                                    <div class="question-number">${test.testId.slice(-6)}-В${index + 1}</div>
+                                    <div class="question-number">В${index + 1}</div>
                                     <div style="font-size: 11px; color: ${answer ? '#4CAF50' : '#f44336'}">
                                         ${answer ? '✓ Ответ дан' : '⏳ Ожидает'}
                                     </div>
@@ -614,21 +695,6 @@
                 }
             }
             
-            // Обновление статуса
-            function updateStatus(text, type = 'info') {
-                const statusElement = document.getElementById('connection-status');
-                if (statusElement) {
-                    statusElement.textContent = text;
-                    
-                    const dot = statusElement.previousElementSibling;
-                    if (dot) {
-                        dot.style.background = type === 'success' ? '#4CAF50' : 
-                                              type === 'warning' ? '#FF9800' : 
-                                              type === 'error' ? '#f44336' : '#2196F3';
-                    }
-                }
-            }
-            
             // Обновление ID админа
             function updateAdminId() {
                 const adminIdElement = document.getElementById('admin-id');
@@ -647,16 +713,17 @@
             
             // Показать уведомление
             function showNotification(message, type = 'info') {
-                // Создаем уведомление
+                // Удаляем старые уведомления
+                document.querySelectorAll('.notification').forEach(el => el.remove());
+                
                 const notification = document.createElement('div');
+                notification.className = `notification notification-${type}`;
+                notification.textContent = message;
                 notification.style.cssText = `
                     position: fixed;
                     top: 20px;
                     right: 20px;
                     padding: 12px 20px;
-                    background: ${type === 'success' ? '#4CAF50' : 
-                                type === 'error' ? '#f44336' : '#2196F3'};
-                    color: white;
                     border-radius: 8px;
                     z-index: 10000;
                     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
@@ -665,7 +732,6 @@
                     font-family: 'Segoe UI', sans-serif;
                 `;
                 
-                notification.textContent = message;
                 document.body.appendChild(notification);
                 
                 // Удаляем через 3 секунды
@@ -673,32 +739,12 @@
                     notification.style.animation = 'slideOut 0.3s ease';
                     setTimeout(() => notification.remove(), 300);
                 }, 3000);
-                
-                // Добавляем CSS анимации
-                if (!document.getElementById('notification-styles')) {
-                    const style = document.createElement('style');
-                    style.id = 'notification-styles';
-                    style.textContent = `
-                        @keyframes slideIn {
-                            from { transform: translateX(100%); opacity: 0; }
-                            to { transform: translateX(0); opacity: 1; }
-                        }
-                        @keyframes slideOut {
-                            from { transform: translateX(0); opacity: 1; }
-                            to { transform: translateX(100%); opacity: 0; }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
             }
             
             // Глобальные функции для кнопок
             window.refreshRoom = function(roomId) {
                 if (socket && isConnected) {
-                    socket.send(JSON.stringify({
-                        type: 'request_all_tests',
-                        adminId: adminId
-                    }));
+                    requestAllTests();
                     showNotification(`Комната ${roomId} обновлена`, 'success');
                 }
             };
@@ -712,7 +758,6 @@
                         test.questions.forEach(question => {
                             const currentAnswer = test.answers?.get(question.id);
                             if (!currentAnswer || currentAnswer.trim() === '') {
-                                // Автоматически заполняем "ответ дан"
                                 submitAnswer(test.testId, question.id, "ответ дан");
                             }
                         });
@@ -730,36 +775,31 @@
             function init() {
                 console.log('🚀 Инициализация админ-панели...');
                 
+                // Сразу показываем контент
+                document.body.style.display = 'block';
+                
                 // Подключаемся к WebSocket
                 connectWebSocket();
                 
-                // Периодическая проверка соединения
+                // Периодически проверяем соединение
                 setInterval(() => {
                     if (!isConnected && socket?.readyState !== WebSocket.CONNECTING) {
+                        console.log('🔄 Проверка соединения...');
                         connectWebSocket();
                     }
                 }, 10000);
                 
-                // Запрашиваем тесты каждые 30 секунд
+                // Автоматически запрашиваем тесты каждые 30 секунд
                 setInterval(() => {
                     if (socket && isConnected) {
-                        socket.send(JSON.stringify({
-                            type: 'request_all_tests',
-                            adminId: adminId
-                        }));
+                        requestAllTests();
                     }
                 }, 30000);
-                
-                // Автообновление интерфейса
-                setInterval(() => {
-                    updateRoomsCount();
-                }, 5000);
             }
             
             // Запуск
-            init();
+            document.addEventListener('DOMContentLoaded', init);
         })();
     </script>
 </body>
 </html>
-
