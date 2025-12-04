@@ -1,350 +1,141 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админка — АвтоТесты</title>
-    <style>
-        :root {
-            --bg: #0f0f0f;
-            --card: #1a1a1a;
-            --accent: #00ff9d;
-            --text: #e0e0e0;
-            --text-muted: #888;
-        }
-        body {
-            margin: 0; padding: 0;
-            font-family: 'Segoe UI', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        header {
-            text-align: center;
-            padding: 20px 0;
-            border-bottom: 1px solid #333;
-            margin-bottom: 30px;
-        }
-        header h1 {
-            margin: 0;
-            font-size: 2.2em;
-            background: linear-gradient(90deg, #00ff9d, #00b8ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 30px;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-        }
-        .stat {
-            background: var(--card);
-            padding: 15px 25px;
-            border-radius: 12px;
-            text-align: center;
-            min-width: 140px;
-            box-shadow: 0 4px 15px rgba(0,255,157,0.1);
-        }
-        .stat strong { display: block; font-size: 2em; color: var(--accent); }
+<meta charset="UTF-8">
+<title>ЖИВЫЕ ТЕСТЫ — АДМИН + ПОМОЩНИК</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    :root { --bg: #0d0d0d; --card: #1a1a1a; --green: #00ff88; --red: #ff3366; }
+    body { margin:0; font-family: 'Segoe UI', sans-serif; background:var(--bg); color:#fff; }
+    .container { max-width:1400px; margin:0 auto; padding:20px; }
+    h1 { text-align:center; color:var(--green); text-shadow:0 0 20px var(--green); margin:20px 0; }
+    .stats { display:flex; justify-content:center; gap:30px; flex-wrap:wrap; margin:30px 0; }
+    .stat { background:var(--card); padding:20px; border-radius:15px; text-align:center; min-width:130px; box-shadow:0 0 20px rgba(0,255,136,0.2); }
+    .stat strong { font-size:2.5em; color:var(--green); display:block; }
 
-        .tests-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-            gap: 20px;
-        }
-        .test-card {
-            background: var(--card);
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-            transition: transform 0.3s, box-shadow 0.3s;
-            cursor: pointer;
-        }
-        .test-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 16px 40px rgba(0,255,157,0.2);
-        }
-        .test-header {
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            padding: 16px;
-            color: white;
-        }
-        .test-header h3 {
-            margin: 0;
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        .test-info {
-            padding: 12px 16px;
-            font-size: 0.9em;
-            color: var(--text-muted);
-        }
-        .questions-count {
-            background: rgba(0,255,157,0.15);
-            color: var(--accent);
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-weight: bold;
-            display: inline-block;
-            margin-top: 8px;
-        }
+    .rooms { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:20px; margin-top:30px; }
+    .room { background:var(--card); border-radius:16px; padding:20px; cursor:pointer; transition:0.3s; border:2px solid #333; }
+    .room:hover { border-color:var(--green); transform:scale(1.03); box-shadow:0 0 30px rgba(0,255,136,0.3); }
+    .room h3 { margin:0 0 10px; color:var(--green); }
+    .room small { opacity:0.8; }
 
-        /* Модалка с тестом */
-        #test-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.95);
-            z-index: 9999;
-            overflow-y: auto;
-            padding: 20px;
-            align-items: flex-start;
-            justify-content: center;
-        }
-        .modal-content {
-            background: #111;
-            border-radius: 20px;
-            width: 100%;
-            max-width: 1100px;
-            margin: 40px auto;
-            box-shadow: 0 20px 60px rgba(0,255,157,0.2);
-            position: relative;
-        }
-        .modal-header {
-            padding: 20px;
-            border-bottom: 1px solid #333;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .modal-header h2 { margin: 0; color: var(--accent); }
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 2em;
-            color: #aaa;
-            cursor: pointer;
-        }
-        .questions-container {
-            padding: 20px;
-            display: grid;
-            gap: 30px;
-        }
-        .question {
-            background: #1a1a1a;
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid #333;
-        }
-        .question-num {
-            color: var(--accent);
-            font-weight: bold;
-            font-size: 1.3em;
-            margin-bottom: 15px;
-        }
-        .question-img, .answer-img {
-            max-width: 100%;
-            border-radius: 12px;
-            margin: 10px 0;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        .answers-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        .answer {
-            text-align: center;
-            padding: 10px;
-            background: #222;
-            border-radius: 12px;
-            border: 2px solid transparent;
-        }
-        .answer-letter {
-            display: inline-block;
-            width: 32px;
-            height: 32px;
-            background: var(--accent);
-            color: black;
-            border-radius: 50%;
-            font-weight: bold;
-            font-size: 1.2em;
-            margin-bottom: 8px;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 60px;
-            font-size: 1.4em;
-            color: #666;
-        }
-        .no-tests { text-align: center; padding: 80px; color: #888; font-size: 1.5em; }
-    </style>
+    .test-view { display:none; background:var(--card); border-radius:20px; padding:30px; margin-top:30px; }
+    .question { background:#111; border-radius:16px; padding:25px; margin-bottom:30px; border:2px solid #333; }
+    .qnum { color:var(--green); font-size:1.5em; font-weight:bold; margin-bottom:15px; }
+    .qimg { max-width:100%; border-radius:12px; margin:15px 0; box-shadow:0 0 20px rgba(0,0,0,0.8); }
+    .answers { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:15px; margin-top:20px; }
+    .ans { text-align:center; padding:15px; background:#0a0a0a; border-radius:12px; cursor:pointer; transition:0.3s; border:2px solid #444; }
+    .ans:hover { border-color:var(--green); }
+    .ans.correct { border-color:var(--green) !important; background:#002211 !important; box-shadow:0 0 20px rgba(0,255,136,0.5); animation:pulse 1.5s infinite; }
+    .ans-letter { display:inline-block; width:40px; height:40px; background:var(--green); color:#000; border-radius:50%; font-weight:bold; font-size:1.4em; margin-bottom:10px; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
+    .back-btn { background:var(--green); color:#000; border:none; padding:12px 30px; border-radius:50px; font-size:1.1em; cursor:pointer; margin-bottom:20px; }
+</style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>АВТО-ТЕСТЫ ОНЛАЙН</h1>
-        <p>Все тесты приходят автоматически · Никаких скринов</p>
-    </header>
-
+    <h1>ЖИВЫЕ ТЕСТЫ — РЕАЛЬНОЕ ВРЕМЯ</h1>
     <div class="stats">
-        <div class="stat">
-            <strong id="total-tests">0</strong>
-            <div>Всего тестов</div>
-        </div>
-        <div class="stat">
-            <strong id="total-questions">0</strong>
-            <div>Вопросов</div>
-        </div>
-        <div class="stat">
-            <strong id="last-update">-</strong>
-            <div>Последний</div>
-        </div>
+        <div class="stat"><strong id="total">0">0</strong><div>Комнат</div></div>
+        <div class="stat"><strong id="questions">0</strong><div>Вопросов</div></div>
+        <div class="stat"><strong id="answered">0</strong><div>Отвечено</div></div>
     </div>
 
-    <div id="tests-container" class="tests-grid">
-        <div class="loading">Ожидание тестов...</div>
-    </div>
-</div>
+    <div id="rooms-list" class="rooms"></div>
 
-<!-- Модалка -->
-<div id="test-modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2 id="modal-title">Тест</h2>
-            <button class="close-btn" id="close-modal">×</button>
-        </div>
-        <div class="questions-container" id="modal-questions"></div>
+    <div id="test-view" class="test-view">
+        <button class="back-btn" onclick="backToRooms()">Назад к комнатам</button>
+        <h2 id="room-title">Комната</h2>
+        <div id="questions"></div>
     </div>
 </div>
 
 <script>
-    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${location.host}`);
+    const ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://') + location.host);
+    const rooms = new Map(); // studentId → данные теста
+    let currentRoom = null;
 
-    const testsContainer = document.getElementById('tests-container');
-    const totalTestsEl = document.getElementById('total-tests');
-    const totalQuestionsEl = document.getElementById('total-questions');
-    const lastUpdateEl = document.getElementById('last-update');
-    const modal = document.getElementById('test-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalQuestions = document.getElementById('modal-questions');
-    const closeModal = document.getElementById('close-modal');
-
-    let allTests = new Map(); // helperId → testData
-
-    ws.onopen = () => {
-        console.log('Админка подключена');
-        ws.send(JSON.stringify({ type: 'admin_connect', role: 'admin' }));
-    };
+    ws.onopen = () => ws.send(JSON.stringify({ type: "admin_connect" }));
 
     ws.onmessage = (e) => {
-        try {
-            const data = JSON.parse(e.data);
+        const d = JSON.parse(e.data);
 
-            if (data.type === 'all_tests_full') {
-                allTests = new Map(Object.entries(data.tests));
-                renderTests();
-            }
-
-            if (data.type === 'full_test_update' || data.type === 'new_test_received') {
-                const test = data.test || data;
-                if (test && test.helperId) {
-                    allTests.set(test.helperId, test);
-                    renderTests();
-                    updateStats();
-                }
-            }
-        } catch (err) {
-            console.error('Ошибка парсинга:', err);
+        if (d.type === "room_list") {
+            d.rooms.forEach(r => rooms.set(r.studentId, r));
+            renderRooms();
+        }
+        if (d.type === "new_room" || d.type === "answer_update") {
+            rooms.set(d.studentId, d);
+            renderRooms();
+            if (currentRoom === d.studentId) renderTest(d);
         }
     };
 
-    function updateStats() {
-        const total = allTests.size;
-        const questions = Array.from(allTests.values()).reduce((sum, t) => sum + t.data.length, 0);
-        const last = Array.from(allTests.values()).sort((a,b) => b.timestamp - a.timestamp)[0];
-        totalTestsEl.textContent = total;
-        totalQuestionsEl.textContent = questions;
-        lastUpdateEl.textContent = last ? new Date(last.timestamp).toLocaleTimeString() : '-';
+    function renderRooms() {
+        const list = document.getElementById('rooms-list');
+        const sorted = Array.from(rooms.values()).sort((a,b) => b.timestamp - a.timestamp);
+        
+        list.innerHTML = sorted.map(r => `
+            <div class="room" onclick="openRoom('${r.studentId}')">
+                <h3>Комната ${r.studentId.slice(-10)}</h3>
+                <div>Вопросов: <b>${r.total}</b> | Отвечено: <b>${Object.keys(r.answers||{}).length}</b></div>
+                <small>${new Date(r.timestamp).toLocaleTimeString()}</small>
+            </div>
+        `).join('') || '<div style="grid-column:1/-1;text-align:center;color:#666;padding:50px;font-size:1.5em;">Ожидаем студентов...</div>';
+
+        document.getElementById('total').textContent = rooms.size;
+        document.getElementById('questions').textContent = sorted.reduce((s,r)=>s+r.total,0);
+        document.getElementById('answered').textContent = sorted.reduce((s,r)=>s+Object.keys(r.answers||{}).length,0);
     }
 
-    function renderTests() {
-        testsContainer.innerHTML = '';
-
-        if (allTests.size === 0) {
-            testsContainer.innerHTML = '<div class="no-tests">Тесты ещё не пришли<br>Ждём студентов...</div>';
-            return;
-        }
-
-        // Сортируем по времени (новые сверху)
-        const sorted = Array.from(allTests.values()).sort((a,b) => b.timestamp - a.timestamp);
-
-        sorted.forEach(test => {
-            const card = document.createElement('div');
-            card.className = 'test-card';
-            card.onclick = () => openTestModal(test);
-
-            const time = new Date(test.timestamp).toLocaleString();
-
-            card.innerHTML = `
-                <div class="test-header">
-                    <h3>${test.helperId}</h3>
-                </div>
-                <div class="test-info">
-                    <div>URL: ${test.url || 'неизвестно'}</div>
-                    <div style="margin-top:8px; opacity:0.8;">${time}</div>
-                    <div class="questions-count">${test.data.length} вопросов</div>
-                </div>
-            `;
-            testsContainer.appendChild(card);
-        });
-
-        updateStats();
+    function openRoom(id) {
+        currentRoom = id;
+        const room = rooms.get(id);
+        document.getElementById('rooms-list').style.display = 'none';
+        document.getElementById('test-view').style.display = 'block';
+        document.getElementById('title').textContent = `Комната ${id.slice(-10)} — ${room.total} вопросов`;
+        renderTest(room);
     }
 
-    function openTestModal(test) {
-        modalTitle.textContent = `${test.helperId} · ${test.data.length} вопросов`;
-        modalQuestions.innerHTML = '';
-
-        test.data.forEach((q, idx) => {
-            const qDiv = document.createElement('div');
-            qDiv.className = 'question';
-
-            qDiv.innerHTML = `
-                <div class="question-num">Вопрос ${idx + 1} ${q.points ? `· ${q.points} балл(а)` : ''}</div>
-                ${q.questionImage ? `<img src="${q.questionImage}" class="question-img" loading="lazy">` : '<i>Вопрос без изображения</i>'}
-                
-                <div class="answers-grid">
-                    ${q.answers.map(ans => `
-                        <div class="answer">
-                            <div class="answer-letter">${ans.letter}</div>
-                            <img src="${ans.image}" class="answer-img" loading="lazy">
-                        </div>
-                    `).join('')}
+    function renderTest(room) {
+        const container = document.getElementById('questions');
+        container.innerHTML = room.questions.map((q, i) => {
+            const correct = room.answers?.[q.index];
+            return `
+                <div class="question">
+                    <div class="qnum">Вопрос ${q.index}</div>
+                    <img src="${q.questionImage}" class="qimg">
+                    <div class="answers">
+                        ${q.options.map(o => `
+                            <div class="ans ${correct===o.letter?'correct':''}" onclick="setAnswer('${room.studentId}',${q.index},'${o.letter}')">
+                                <div class="ans-letter">${o.letter.toUpperCase()}</div>
+                                <img src="${o.image}" style="max-width:100%;border-radius:8px;">
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `;
-            modalQuestions.appendChild(qDiv);
-        });
-
-        modal.style.display = 'flex';
+        }).join('');
     }
 
-    closeModal.onclick = () => modal.style.display = 'none';
-    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    function setAnswer(studentId, qIndex, letter) {
+        ws.send(JSON.stringify({
+            type: "set_answer",
+            studentId,
+            questionIndex: qIndex,
+            letter
+        }));
+    }
 
-    // Автообновление каждые 10 сек (на всякий)
-    setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'admin_connect', role: 'admin' }));
-        }
-    }, 10000);
+    function backToRooms() {
+        document.getElementById('test-view').style.display = 'none';
+        document.getElementById('rooms-list').style.display = 'grid';
+        currentRoom = null;
+    }
+
+    // Автообновление списка каждые 8 сек
+    setInterval(() => ws.readyState===1 && ws.send(JSON.stringify({type:"request_rooms"})), 8000);
 </script>
 </body>
 </html>
